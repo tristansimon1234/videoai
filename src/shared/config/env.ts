@@ -46,7 +46,17 @@ const EnvSchema = z.object({
 
 export type Env = z.infer<typeof EnvSchema>
 
-export const env: Env = EnvSchema.parse(process.env)
+// On Vercel, the same Supabase URL is sometimes only set with a VITE_
+// prefix (because the frontend needs it too). Fall back to that so the
+// server boots when only the VITE_-prefixed value is configured.
+// The service key must never be VITE_-prefixed — that would bundle it
+// into the client — so we only fall back for the URL.
+const rawEnv = {
+  ...process.env,
+  SUPABASE_URL: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL,
+}
+
+export const env: Env = EnvSchema.parse(rawEnv)
 
 // Fail-fast in production for the env vars that affect billing or rate
 // limiting — these are the ones where a missing value would silently
