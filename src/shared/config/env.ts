@@ -61,26 +61,21 @@ const rawEnv = {
 
 export const env: Env = EnvSchema.parse(rawEnv)
 
-// Fail-fast in production for the env vars that affect billing or rate
-// limiting — these are the ones where a missing value would silently
-// break user-facing flows rather than just disable an optional feature.
+// Warn (don't crash) in production when optional integrations are unset.
+// The app still boots; routes that depend on these will 503 / fall back
+// individually. Re-tighten these to `throw` once billing + rate limiting
+// are live.
 if (env.NODE_ENV === 'production') {
   if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
-    throw new Error(
-      'STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET must both be set in production. ' +
-      'Without them, paid credit-pack purchases cannot be processed.',
-    )
+    console.warn('[env] STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET unset — credit-pack purchases disabled.')
   }
   if (!env.PUBLIC_APP_URL) {
-    throw new Error('PUBLIC_APP_URL must be set in production (used for Stripe Checkout callbacks).')
+    console.warn('[env] PUBLIC_APP_URL unset — Stripe Checkout callbacks will not work.')
   }
   if (!env.UPSTASH_REDIS_REST_URL || !env.UPSTASH_REDIS_REST_TOKEN) {
-    throw new Error(
-      'UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must both be set in production. ' +
-      'The in-memory rate-limit fallback is bypassable on serverless.',
-    )
+    console.warn('[env] UPSTASH_REDIS_* unset — falling back to in-memory rate limiting (bypassable on serverless).')
   }
   if (!env.VIDEO_SERVICE_URL) {
-    throw new Error('VIDEO_SERVICE_URL must be set in production — the render pipeline depends on it.')
+    console.warn('[env] VIDEO_SERVICE_URL unset — video generation will 503.')
   }
 }
