@@ -38,13 +38,13 @@ const MUSIC_STYLES: { id: string; name: string; mood: string }[] = [
 ]
 
 /**
- * The single video-creation surface. Same 4-step stepper pattern as in
- * Doclee's per-page Marketing tab — brief → voice → music → review.
- * Brand is picked up front (defaults to the user's default brand).
+ * The single video-creation surface. 4-step stepper — brief → voice →
+ * music → review. Brand is picked up front (defaults to the user's
+ * default brand).
  *
  * Synchronous create: the backend route blocks until the full pipeline
- * (script + voice + music + render) finishes. Modal stays open the whole
- * time with the stepper's `submitting=true` state, then closes on
+ * (script + voice + music + render) finishes. The modal stays open the
+ * whole time with the stepper's `submitting=true` state, then closes on
  * success. UI rule: never let the user navigate away from the modal
  * while a credit is being burned — the modal is the receipt.
  */

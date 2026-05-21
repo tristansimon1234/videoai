@@ -3,13 +3,10 @@ import { DatabaseError, NotFoundError } from '../../shared/middleware/error.midd
 import type { MarketingManifest, MarketingVideoSummary, MarketingVideoRenderStatus } from './marketing-video.types.js'
 
 /**
- * Repository for marketing_videos rows.
- *
- * Replaces Doclee's `runs.summary_json.marketingVideo` JSONB-nested pattern
- * with a first-class table. Each video has its own row; the manifest lives
- * in a dedicated `manifest jsonb` column rather than buried inside a
- * generic run summary, which makes the gallery query trivial and dodges
- * the JSONB read-modify-write hazard of the old upsert pattern.
+ * Repository for marketing_videos rows. Each video has its own row; the
+ * manifest lives in a dedicated `manifest jsonb` column so the gallery
+ * query is trivial and we avoid JSONB read-modify-write hazards on
+ * concurrent updates.
  */
 
 export interface MarketingVideoRow {
@@ -166,15 +163,14 @@ export async function deleteMarketingVideo(id: string): Promise<void> {
   if (error) throw new DatabaseError(error.message)
 }
 
-/** Returns a `MarketingVideoSummary` (the shape the existing service code
- *  reads from) built from a row. Lets callers that previously used
- *  `findMarketingVideoByRunId` keep the same shape.
+/** Returns a `MarketingVideoSummary` (the shape the service code reads
+ *  from) built from a row.
  *
  *  The manifest stored in `manifest jsonb` carries every voice/music/script
- *  field the renderer needs; we expose a separate `manifestUrl` by
- *  re-uploading the manifest as JSON to storage (the render service fetches
- *  it by URL). That URL is reconstructed deterministically from the videoId
- *  here so callers don't need to track it separately. */
+ *  field the renderer needs; the pipeline also uploads it as JSON to
+ *  storage so the render service can fetch it by URL. We return
+ *  `manifestUrl: null` here because the URL is built fresh at render time
+ *  in `renderMarketingVideoForRun` rather than tracked on the row. */
 export function toSummary(video: MarketingVideo): MarketingVideoSummary {
   if (!video.manifest) {
     return {
@@ -197,15 +193,14 @@ export function toSummary(video: MarketingVideo): MarketingVideoSummary {
 }
 
 // ============================================================
-// Compatibility shims for code ported from Doclee
+// Summary-shape adapters used by the service layer
 // ============================================================
-// The original service was written against a runId-keyed JSONB nested
-// persistence model. To minimise diff churn during the extraction we keep
-// these helper signatures and adapt them onto the new table. They can be
-// inlined / removed once the service is fully cleaned up.
+// The service layer operates on `MarketingVideoSummary` (which carries
+// the manifest plus rendered video URL + status). These two helpers
+// translate that shape to and from the underlying row.
 
-/** Drop-in replacement for the old `findMarketingVideoByRunId`. Returns the
- *  same `MarketingVideoSummary` shape so call sites don't need to change. */
+/** Read a row and return it as a `MarketingVideoSummary`. Returns null
+ *  when the row doesn't exist or has no manifest yet (pre-generation). */
 export async function findMarketingVideoByRunId(
   videoId: string,
 ): Promise<MarketingVideoSummary | null> {
@@ -214,8 +209,7 @@ export async function findMarketingVideoByRunId(
   return toSummary(video)
 }
 
-/** Drop-in replacement for the old `saveMarketingVideo(runId, summary)`.
- *  Persists every field on the row that the summary carries. */
+/** Persist every field on the row that the summary carries. */
 export async function saveMarketingVideo(
   videoId: string,
   summary: MarketingVideoSummary,

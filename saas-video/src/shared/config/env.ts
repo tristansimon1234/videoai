@@ -2,9 +2,7 @@ import { z } from 'zod'
 
 /**
  * Env vars validated at startup. Anything required in production fails fast
- * here rather than silently 500ing the first time it's accessed. Kept
- * intentionally short — the original Doclee env had a lot of vars that
- * don't apply here (Browserbase, Anthropic, Resend, etc.).
+ * here rather than silently 500ing the first time it's accessed.
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']),
@@ -15,16 +13,12 @@ const EnvSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_KEY: z.string().min(1),
 
-  // AI providers
-  GEMINI_API_KEY: z.string().min(1),
-  // Marketing script generation uses Anthropic Sonnet (architect + designer
-  // passes) + Haiku (skeleton). The mock-rendered output quality is too
-  // dependent on Sonnet's structured output to risk a model swap right now.
+  // AI providers. Marketing script generation uses Anthropic Sonnet 4.6
+  // (designer + repair) + Haiku 4.5 (architect skeleton + AI manifest edit).
   ANTHROPIC_API_KEY: z.string().min(1),
   ELEVENLABS_API_KEY: z.string().optional(),
 
-  // Remotion render service — re-uses the same deployed service Doclee uses
-  // until we spin up our own. Optional in dev so the rest of the stack
+  // Remotion render service. Optional in dev so the rest of the stack
   // boots without it; the generate route 503s when unset.
   VIDEO_SERVICE_URL: z.string().url().optional(),
 

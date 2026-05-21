@@ -3,8 +3,7 @@ import { supabase } from '../db/supabase.client.js'
 
 /**
  * Validates the Supabase JWT and attaches `req.userId` for downstream
- * handlers. Same shape as the Doclee version — kept simple because every
- * authed route here is single-user (no teams, no team-context header).
+ * handlers. Single-user accounts only — no teams, no team-context header.
  */
 export async function authMiddleware(
   req: Request,

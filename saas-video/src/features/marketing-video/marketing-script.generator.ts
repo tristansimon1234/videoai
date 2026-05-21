@@ -1,116 +1,110 @@
-import { SchemaType, type ResponseSchema } from '@google/generative-ai'
 import { generateSonnetText, HAIKU_MODEL } from '../../shared/ai/anthropic.client.js'
 import { MarketingScriptSchema } from './marketing-video.schema.js'
 import type { MarketingScript } from './marketing-video.types.js'
 
 /**
- * Native Gemini schema mirroring MarketingScriptSchema. Passed as
- * `responseSchema` so the API server-side-constrains the output to this exact
- * shape — no missing fields, no rename drift, no envelope wrappers. We still
- * Zod-validate after parsing as defence in depth (string min-length, etc.,
- * which Gemini's schema can't express).
+ * JSON Schema for the architect's structured output. Fed to Anthropic
+ * tool-use as `input_schema` so the model is server-side-constrained to
+ * exactly this shape — no missing fields, no envelope drift. We still
+ * Zod-validate after parsing as defence in depth (string min-length etc.,
+ * which JSON Schema can't express here).
+ *
+ * mockCode is intentionally absent: per-scene mockCode TSX is generated
+ * in stage 2 by parallel designer calls, not by the architect.
  */
-/**
- * Skeleton schema — same shape as RESPONSE_SCHEMA but WITHOUT mockCode
- * on scenes. Used by the first stage of the two-stage generation: get
- * the script structure (hook + voiceovers + headlines + cta + timing)
- * without the heavy TSX. Per-scene mockCode is then generated in
- * parallel by N independent calls.
- */
-export const SKELETON_RESPONSE_SCHEMA: ResponseSchema = {
-  type: SchemaType.OBJECT,
+export const SKELETON_RESPONSE_SCHEMA: Record<string, unknown> = {
+  type: 'object',
   properties: {
     hook: {
-      type: SchemaType.OBJECT,
+      type: 'object',
       properties: {
-        voiceover: { type: SchemaType.STRING },
-        headline: { type: SchemaType.STRING },
-        durationSeconds: { type: SchemaType.NUMBER },
+        voiceover: { type: 'string' },
+        headline: { type: 'string' },
+        durationSeconds: { type: 'number' },
       },
       required: ['voiceover', 'headline', 'durationSeconds'],
     },
     scenes: {
-      type: SchemaType.ARRAY,
+      type: 'array',
       items: {
-        type: SchemaType.OBJECT,
+        type: 'object',
         properties: {
-          voiceover: { type: SchemaType.STRING },
-          headline: { type: SchemaType.STRING },
-          subhead: { type: SchemaType.STRING },
-          screenshotIndex: { type: SchemaType.INTEGER, nullable: true },
-          durationSeconds: { type: SchemaType.NUMBER },
+          voiceover: { type: 'string' },
+          headline: { type: 'string' },
+          subhead: { type: 'string' },
+          screenshotIndex: { type: ['integer', 'null'] },
+          durationSeconds: { type: 'number' },
           // Architect-picked mode for the per-scene designer call.
           // One of the 8 ids in SCENE_MODES. Stage 2 looks up the
           // matching reference template by id.
-          visualMode: { type: SchemaType.STRING },
+          visualMode: { type: 'string' },
           // Concrete brief: 2-3 sentences naming specific elements,
           // numbers, motion. Stage 2 implements this brief in TSX.
-          visualBrief: { type: SchemaType.STRING },
+          visualBrief: { type: 'string' },
           // Optional cadrage override: 'browser' | 'mobile' | 'terminal'
           // | 'fullbleed' | 'split'. When set, overrides the mode's
           // default frame choice — lets the architect pick "fullbleed
-          // hero-stat" or "split chat", which the previous monolithic
-          // mode-defines-frame coupling couldn't express.
-          framing: { type: SchemaType.STRING },
+          // hero-stat" or "split chat".
+          framing: { type: 'string' },
           // Optional: when false, the composition layer skips the
           // headline panel and the mock owns the full 1920×1080 canvas.
           // Pick for a single cinematic shot — voice-over carries the
           // narrative. Orthogonal to `framing`. Default true.
-          headlinePanel: { type: SchemaType.BOOLEAN },
+          headlinePanel: { type: 'boolean' },
         },
         required: ['voiceover', 'headline', 'screenshotIndex', 'durationSeconds'],
       },
     },
     cta: {
-      type: SchemaType.OBJECT,
+      type: 'object',
       properties: {
-        voiceover: { type: SchemaType.STRING },
-        headline: { type: SchemaType.STRING },
-        buttonLabel: { type: SchemaType.STRING },
-        durationSeconds: { type: SchemaType.NUMBER },
+        voiceover: { type: 'string' },
+        headline: { type: 'string' },
+        buttonLabel: { type: 'string' },
+        durationSeconds: { type: 'number' },
       },
       required: ['voiceover', 'headline', 'buttonLabel', 'durationSeconds'],
     },
-    totalDurationSeconds: { type: SchemaType.NUMBER },
-    language: { type: SchemaType.STRING },
-    // Architect-picked aesthetic for the whole video. One of
-    // STYLE_SEEDS labels — orchestrator looks up the brief and feeds
-    // it to designer agents. Optional: when the model omits it, the
-    // orchestrator falls back to a random seed.
-    styleSeed: { type: SchemaType.STRING },
+    totalDurationSeconds: { type: 'number' },
+    language: { type: 'string' },
+    // Architect-picked aesthetic for the whole video. One of the
+    // STYLE_SEEDS labels OR a free-text brief — orchestrator looks
+    // up the label first and falls back to verbatim. Optional: when
+    // the model omits it, orchestrator picks a random catalog seed.
+    styleSeed: { type: 'string' },
   },
   required: ['hook', 'scenes', 'cta', 'totalDurationSeconds', 'language'],
 }
 
-/** Backward-compat alias — older imports may still expect RESPONSE_SCHEMA. */
-export const RESPONSE_SCHEMA = SKELETON_RESPONSE_SCHEMA
-
 interface GenerateMarketingScriptInput {
   productName: string
-  pageTitle: string
-  pageMarkdown: string
-  /** Number of doc screenshots available — Gemini may reference up to this
-   *  many via `screenshotIndex`. */
+  title: string
+  brief: string
+  /** Number of available screenshots — the architect may reference up to
+   *  this many via `screenshotIndex`. Standalone product currently sends
+   *  0 (mocks mode); the field stays for the future "ground in real
+   *  screenshots" path. */
   availableScreenshots: number
-  /** Captions for each screenshot, so Gemini knows what's on each frame
-   *  before deciding which one to feature in which scene. */
+  /** Captions for each screenshot, so the architect knows what's on each
+   *  frame before deciding which one to feature in which scene. */
   screenshotCaptions: string[]
-  /** Target language inferred from the doc — Gemini stays in this language
-   *  even if the surrounding UI / metadata uses something else. */
+  /** Target language inferred from the brief. The architect stays in
+   *  this language even if the surrounding UI / metadata uses something
+   *  else. */
   language: string
   /** Voice tone preset selected by the user — drives which ElevenLabs
-   *  audio tags Gemini should embed in the voice-over lines (punchy →
-   *  [excited], calm → [short pause], etc.). Without this the script
-   *  comes out flat and the voice reads it flat. */
+   *  audio tags the architect should embed in the voice-over lines
+   *  (punchy → [excited], calm → [short pause], etc.). Without this the
+   *  script comes out flat and the voice reads it flat. */
   tone?: import('./marketing-video.types.js').VoiceTone
-  /** Visual style — drives whether Gemini fills every scene with a real
-   *  screenshot (screenshotIndex set, no mock) or with a designed mock
-   *  (screenshotIndex=null, mock set). NOT mixed within a video. */
+  /** Visual style — drives whether the architect fills every scene with
+   *  a real screenshot (screenshotIndex set, no mock) or with a designed
+   *  mock (screenshotIndex=null, mock set). NOT mixed within a video. */
   visualMode?: 'screenshots' | 'mocks'
-  /** Optional creative brief from the user: angle, audience, feature to
-   *  emphasize, tone shift. NOT a content source — the doc remains the
-   *  factual ground truth, this just steers framing. Trimmed and clamped
-   *  upstream by Zod. */
+  /** Optional steering from the user on top of the main brief: angle,
+   *  audience, feature to emphasize, tone shift. NOT a content source —
+   *  the brief stays the factual ground truth, this just steers framing.
+   *  Trimmed and clamped upstream by Zod. */
   userPrompt?: string
 }
 
@@ -128,10 +122,11 @@ const TONE_TAG_DIRECTION: Record<NonNullable<GenerateMarketingScriptInput['tone'
   conversational: 'Lean natural-podcast: [short pause] for thinking pauses, occasional rising intonation, no exclamatory tags. CAPS rare. 1-2 audio tags total.',
 }
 
-/** Concrete voiceover examples per tone. Pasted into the prompt so Gemini
- *  pattern-matches against tagged prose instead of clean prose. The
- *  earlier prompt described the rules abstractly and Gemini still output
- *  flat strings — examples beat instructions for in-context steering. */
+/** Concrete voiceover examples per tone. Pasted into the prompt so the
+ *  model pattern-matches against tagged prose instead of clean prose.
+ *  The earlier prompt described the rules abstractly and the model
+ *  still output flat strings — examples beat instructions for in-
+ *  context steering. */
 const TONE_VOICEOVER_EXAMPLES: Record<NonNullable<GenerateMarketingScriptInput['tone']>, string> = {
   punchy: `hook.voiceover:  "[excited] Stop wasting hours writing docs nobody reads. One screen recording — that's all it takes."
 scenes[0].voiceover: "Hit record. Walk through the feature. The AI watches every click and turns it into a STRUCTURED guide with screenshots and voice-over."
@@ -182,7 +177,7 @@ function repairTruncatedJson(jsonStr: string): string | null {
   // Don't bother on inputs that don't even look like a JSON object.
   if (!jsonStr.trimStart().startsWith('{')) return null
   const minLen = Math.max(50, Math.floor(jsonStr.length * 0.1))
-  // Walk back in larger steps initially, then refine — typical Gemini
+  // Walk back in larger steps initially, then refine — typical
   // truncation is at the END, so we don't need single-char precision
   // most of the time.
   for (let step of [1, 4, 16, 64]) {
@@ -228,9 +223,9 @@ function repairTruncatedJson(jsonStr: string): string | null {
   return null
 }
 
-/** Strip half-open ElevenLabs tags Gemini sometimes produces (e.g.
- *  "[excite" or trailing "["). Without this the TTS reads the bracket out
- *  loud or drops the segment. Mirrors the helper in voiceover.service.ts. */
+/** Strip half-open ElevenLabs tags the model sometimes produces (e.g.
+ *  "[excite" or trailing "["). Without this the TTS reads the bracket
+ *  out loud or drops the segment. */
 export function stripBrokenAudioTags(text: string): string {
   let cleaned = text
   cleaned = cleaned.replace(/\s*\[[^\]]*$/g, '').trim()
@@ -240,23 +235,20 @@ export function stripBrokenAudioTags(text: string): string {
 }
 
 /**
- * Asks Gemini for a 60s marketing-video script grounded in the doc's actual
- * content. Output is structured JSON validated by Zod — never trust raw
- * model output.
- *
- * Why a different prompt than the doc voice-over: the tutorial narration is
- * paced to walk a user through steps. Marketing narration has to hook in 3
- * seconds, sell 3 benefits, and CTA — completely different rhythm. Reusing
- * the tutorial voice-over for marketing produces sleepy videos.
+ * Two-stage script generation. Stage 1 (architect) returns the full
+ * script structure as JSON validated by Zod — never trust raw model
+ * output. Stage 2 (designers) fills in per-scene TSX in parallel.
  */
-/** Style seeds rotated per generation to fight Gemini's tendency to
- *  converge on the same "browser frame + bento + chat" sequence every
- *  time it sees the same product. Each seed pushes a distinct visual
- *  direction + a different mode mix; one is picked at random per call.
+/** Style seeds rotated per generation to fight the model's tendency
+ *  to converge on the same "browser frame + bento + chat" sequence
+ *  every time it sees the same product. Each seed pushes a distinct
+ *  visual direction + a different mode mix; one is picked at random
+ *  per call.
  *
  *  This is the cheapest variety lever — no model swap, no schema
- *  change, just a textual nudge in the prompt. Gemini at temperature
- *  0.85 takes the hint and produces meaningfully different output.
+ *  change, just a textual nudge in the prompt. At temperature ~0.6+
+ *  the architect takes the hint and produces meaningfully different
+ *  output.
  *
  *  Adding a seed here is the way to introduce a new aesthetic; don't
  *  bake it into the main prompt body where it would steamroll all the
@@ -306,7 +298,7 @@ function pickStyleSeed(): typeof STYLE_SEEDS[number] {
 /**
  * Single-scene rescue path. Two modes:
  *  - REPAIR: existing mockCode failed to compile/lint — feed the error
- *    + the broken code and ask Gemini to fix it.
+ *    + the broken code and ask the designer to fix it.
  *  - GENERATE: mockCode is missing entirely (token budget exhausted in
  *    the main script generation) — pass an empty string and a generate-
  *    from-scratch directive in compileError. The prompt branches on
@@ -361,12 +353,8 @@ Creative latitude: any palette, any glow intensity, any background, inline fontF
 
 Return ONLY the raw TSX (no markdown fences, no explanation, no surrounding prose). It will be passed straight to esbuild.`
 
-  // Try Pro first; fall back to Flash if Pro returns empty (503 silently
-  // swallowed) or throws on overload. Flash is faster and almost always
-  // good enough for a single-scene mock. Cheaper too.
-  // maxTokens is REQUIRED by Gemini, but you only pay for actually-
   // Sonnet 4.6 handles single-scene TSX rescue cleanly. maxTokens at
-  // 16k gives comfortable margin over the 9000-char compile cap; the
+  // 16k gives comfortable margin over the 15000-char compile cap; the
   // input rejection in mock-code.compiler.ts bounds the source size
   // even if the model goes long. No fallback model — if Sonnet errors
   // (rate-limit / overload), we let it bubble up and the calling
@@ -1436,9 +1424,7 @@ Return ONLY the raw TSX — no markdown fences, no explanation, no surrounding p
 
 async function generateSceneMockCode(args: BuildSceneMockPromptArgs): Promise<string> {
   const userPrompt = buildSceneMockPrompt(args)
-  // Sonnet 4.6 has visibly stronger TSX + React composition than
-  // Gemini Pro — bento layouts, perspective tilts, type hierarchy land
-  // closer to the references. Per-scene calls run in parallel so the
+  // Designer call on Sonnet. Per-scene calls run in parallel so the
   // wall-clock penalty caps at max(scenes), not sum. No model fallback:
   // on Sonnet error the calling pipeline routes through repairMockCode
   // (also Sonnet) and then `applyDeterministicFallback` if that fails.
@@ -1535,7 +1521,7 @@ function buildSkeletonPrompt(input: GenerateMarketingScriptInput): string {
     .join('\n')
 
   const briefBlock = input.userPrompt?.trim()
-    ? `\n## Creative brief from the user (HIGHEST PRIORITY for framing — but never overrides the documentation as factual ground truth)\n\n${input.userPrompt.trim()}\n\nRespect this brief: pick the angle, audience, tone shift, and which capabilities to emphasize from it. If the brief asks for something the documentation doesn't support, stay grounded in the docs and pivot the framing — don't invent features to satisfy the brief.\n`
+    ? `\n## Additional steering from the user\n\n${input.userPrompt.trim()}\n\nApply this steering on top of the main brief above — adjust angle, audience, tone, or feature emphasis as it asks. Stay grounded in the brief's facts; don't invent capabilities the brief doesn't claim.\n`
     : ''
 
   // Catalog of aesthetic directions the architect picks from. Each
@@ -1627,16 +1613,18 @@ Total duration MUST be EXACTLY 45 seconds. Allocate the budget like this:
 
 Keep voice-over CONCISE — target **85 words total** across all parts (NOT 100; audio tags + em-dashes + ellipses each add real silence at synthesis time, so spoken duration consistently exceeds the word-count estimate). Short punchy sentences. Sentence fragments are OK ("Built for speed."). Active verbs. No filler. Better to be slightly under 45s than over.
 
-## Source documentation
+## The brief
 
 Product: ${input.productName}
-Feature page: ${input.pageTitle}
+Working title: ${input.title}
 
-Markdown content (use as the ONLY source of truth — don't invent features):
-${input.pageMarkdown.slice(0, 6000)}
+The user's brief (this IS the source of truth — every claim and feature
+mentioned in the script must trace back to something stated or directly
+implied here; don't invent capabilities):
+${input.brief.slice(0, 6000)}
 ${briefBlock}${styleSeedBlock}
 
-## Available screenshots (from the same doc)
+## Available screenshots
 
 ${captionList || '(no screenshots available — every scene MUST have screenshotIndex: null)'}
 
@@ -1698,13 +1686,10 @@ async function generateScriptSkeleton(
 ): Promise<MarketingScript> {
   const userPrompt = buildSkeletonPrompt(input)
 
-  // Sonnet 4.6 via tool-use for structured JSON output. The Gemini
-  // ResponseSchema is structurally a JSON Schema (SchemaType.OBJECT
-  // === "object" etc. at runtime), so it drops straight into Anthropic's
-  // input_schema field. The helper forces the model to invoke a single
-  // `submit_response` tool whose input matches the schema, then returns
-  // JSON.stringify(input) — the rest of the parsing path (JSON.parse +
-  // Zod validation below) is unchanged.
+  // Tool-use for structured JSON output. The helper forces the model
+  // to invoke a single `submit_response` tool whose input matches
+  // SKELETON_RESPONSE_SCHEMA, then returns JSON.stringify(input). The
+  // parse + Zod path below validates as defence in depth.
   const result = await generateSonnetText({
     userPrompt,
     // Architect on Haiku 4.5 — the job is structured JSON output +
@@ -1715,7 +1700,7 @@ async function generateScriptSkeleton(
     model: HAIKU_MODEL,
     maxTokens: 16_384,
     temperature: 0.6,
-    jsonSchema: SKELETON_RESPONSE_SCHEMA as unknown as Record<string, unknown>,
+    jsonSchema: SKELETON_RESPONSE_SCHEMA,
   })
 
   let jsonStr = result.text.trim()
@@ -1761,7 +1746,7 @@ async function generateScriptSkeleton(
   const parsed = MarketingScriptSchema.safeParse(parsedJson)
   if (!parsed.success) {
     const preview = JSON.stringify(parsedJson).slice(0, 1000)
-    console.error('[marketing-script/skeleton] Gemini returned (first 1000 chars):', preview)
+    console.error('[marketing-script/skeleton] Model returned (first 1000 chars):', preview)
     console.error('[marketing-script/skeleton] Zod issues:', JSON.stringify(parsed.error.issues))
     throw new Error(`Marketing script skeleton JSON failed validation: ${JSON.stringify(parsed.error.issues)}`)
   }
@@ -1793,13 +1778,13 @@ async function generateScriptSkeleton(
 
 /**
  * Two-stage generation — architect / designer pattern.
- *  1. Architect (skeleton call): one Flash call. Returns the full
+ *  1. Architect (skeleton call): one Haiku call. Returns the full
  *     script structure (hook + scene voiceovers + headlines + timing
  *     + cta) AND, per scene, a `visualMode` pick + a concrete
  *     `visualBrief` (2-3 sentences naming exact elements / numbers /
  *     motion). The architect sees the WHOLE video so it can enforce
  *     variety + visual coherence between scenes.
- *  2. Designers (per-scene calls): N parallel Pro calls, one per
+ *  2. Designers (per-scene calls): N parallel Sonnet calls, one per
  *     scene. Each designer ONLY sees its own scene + the architect's
  *     brief + the assigned mode's reference template. It implements
  *     the brief in TSX.

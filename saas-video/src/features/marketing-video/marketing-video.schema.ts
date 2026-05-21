@@ -3,7 +3,7 @@ import { LenientHexColorSchema } from '../../shared/design/colors.js'
 import { isAllowedFontFamily, DEFAULT_FONT } from '../../shared/design/fonts.js'
 
 /** Mirrors MockTone from marketing-video.types.ts. Wrapped in preprocess
- *  so anything Gemini hallucinates ("primary", "highlight", a hex code,
+ *  so anything the model hallucinates ("primary", "highlight", a hex code,
  *  …) becomes undefined instead of failing the whole script validation.
  *  Same trick for frame.tone and mock.layout — defence in depth against
  *  the LLM drifting from the documented enum. */
@@ -25,10 +25,10 @@ const LayoutSchema = z.preprocess(
   z.enum(LAYOUT_VALUES).optional(),
 )
 
-/** Single primitive in the mock DSL. Matches MockElement union — Gemini
- *  emits objects with discriminator `type` and a flat set of
+/** Single primitive in the mock DSL. Matches MockElement union — the
+ *  model emits objects with discriminator `type` and a flat set of
  *  type-specific fields. We keep this permissive on missing fields
- *  (rather than discriminated-union strict) because Gemini's
+ *  (rather than discriminated-union strict) because the model's
  *  responseSchema can't model discriminated unions and unknown LLM
  *  behaviour is better handled with a soft schema + drop-on-fail. */
 const SizeSchema = z.preprocess(
@@ -85,7 +85,7 @@ const MarketingMockSchema = z.object({
   elements: z.array(MockElementSchema).max(20),
 })
 
-/** Zod for what Gemini returns as the marketing script. Field names mirror
+/** Zod for what the model returns as the marketing script. Field names mirror
  *  MarketingScript so the parsed output drops straight into the service. */
 export const MarketingSceneSchema = z.object({
   voiceover: z.string().min(1),
@@ -95,12 +95,11 @@ export const MarketingSceneSchema = z.object({
   durationSeconds: z.number().positive(),
   /** Legacy DSL mock — backwards-compat for any persisted manifests. */
   mock: MarketingMockSchema.optional(),
-  /** Free TSX written by Gemini / the MCP caller for this scene's
-   *  animation. Compiled server-side; the bundle never sees this
-   *  directly. Cap raised to 15k after seeing legitimate rewrites at
-   *  9-12k once primitives + chrome-optional layouts entered the
-   *  vocabulary. The compile step still enforces its own per-scene cap
-   *  as a safety net. */
+  /** Free TSX the designer agent wrote for this scene's animation.
+   *  Compiled server-side; the bundle never sees this directly. Cap
+   *  raised to 15k after seeing legitimate rewrites at 9-12k once
+   *  primitives + chrome-optional layouts entered the vocabulary. The
+   *  compile step still enforces its own per-scene cap as a safety net. */
   mockCode: z.string().max(15_000).optional(),
   /** esbuild output of mockCode. Remotion's <DynamicScene> wraps it in
    *  a `new Function(...)` with React + Remotion + branding bound,
@@ -204,8 +203,8 @@ const MarketingScreenshotSchema = z.object({
 })
 
 // Hex + font validation lives in the shared design module (imported at
-// the top). The persistence path is synchronous; same source of truth
-// as project settings, the AI auto-fill route, and the manifest editor.
+// the top). Same source of truth as the brand schema so a manifest
+// branding patch can never drift from what brand.routes accepts.
 const ManifestFontFamilySchema = z.preprocess(
   (v) => (typeof v === 'string' && isAllowedFontFamily(v) ? v : DEFAULT_FONT.cssValue),
   z.string(),

@@ -1,11 +1,8 @@
 /**
- * Marketing-video MVP — turns a documented page into a 60s 16:9 marketing
- * video. The backend produces a manifest (script + voice-over URL +
- * screenshot URLs + branding); Remotion consumes the manifest at the project
- * root to render the actual MP4. Server-side rendering is intentionally out
- * of scope for the MVP — we want to validate the *creative* output (template
- * quality, script tone, screenshot timing) before sinking time into render
- * infra.
+ * Marketing-video types. Turns a free-form product brief into a 45-second
+ * 16:9 marketing video. The backend produces a manifest (script + voice-
+ * over URL + branding + per-scene TSX); the standalone Remotion render
+ * service consumes the manifest to produce the final MP4.
  */
 
 /** Tone label that maps to a brand-aware color in the renderer. We keep
@@ -15,7 +12,7 @@ export type MockTone = 'default' | 'muted' | 'accent' | 'success' | 'warning' | 
 
 /** Single primitive in the mock DSL. The Remotion-side renderer maps each
  *  one-to-one to a frame-driven React component. Recursive `group` is
- *  intentionally NOT exposed to the LLM (Gemini's responseSchema can't
+ *  intentionally NOT exposed to the LLM (the model's responseSchema can't
  *  represent recursion); the layout can be controlled via the top-level
  *  `Mock.layout`. */
 export type MockElement =
@@ -104,16 +101,16 @@ export interface MarketingScript {
   cta: {
     voiceover: string
     headline: string
-    /** Short button-style label, e.g. "Try Doclee free". */
+    /** Short button-style label, e.g. "Start free" or "Try it today". */
     buttonLabel: string
     durationSeconds: number
   }
   /** Total target duration — should match sum of scene durations. The
    *  Remotion composition uses this to set total frame count. */
   totalDurationSeconds: number
-  /** ISO-639 language code (e.g. "en", "fr") inferred from the source doc.
-   *  Used to pick the matching ElevenLabs voice and to keep the script in
-   *  the doc's language rather than the UI language. */
+  /** ISO-639 language code (e.g. "en", "fr") inferred from the user's
+   *  brief. Used to pick the matching ElevenLabs voice and to keep the
+   *  script in the brief's language rather than the UI language. */
   language: string
   /** Architect-picked aesthetic for the whole video — one of the
    *  STYLE_SEEDS labels (editorial, brutalist, data-density, etc.).
@@ -144,7 +141,7 @@ export interface MarketingBranding {
   textColor: string
   fontFamily: string
   logoUrl: string | null
-  /** Public URL of the product (e.g. https://doclee.tech). When null, the
+  /** Public URL of the product (e.g. https://acme.io). When null, the
    *  Cta scene falls back to `${slugified-productName}.com`. */
   websiteUrl?: string | null
   /** Corner radius in px for primitives + the Cta button. Default 14. */
@@ -152,10 +149,10 @@ export interface MarketingBranding {
 }
 
 export interface MarketingManifest {
-  /** Id of the marketing_videos row this manifest belongs to. Renamed from
-   *  Doclee's `runId` since this product has no run table. The render
-   *  service still receives it as `runId` in its payload for backwards
-   *  compatibility (see video.client.ts). */
+  /** Id of the marketing_videos row this manifest belongs to. The
+   *  render service receives it as `runId` in its wire payload — that's
+   *  the protocol field name the shared Remotion service expects (see
+   *  video.client.ts). */
   videoId: string
   generatedAt: string
   script: MarketingScript
@@ -189,9 +186,9 @@ export interface MarketingManifest {
   musicError?: string | null
   /** Public URL to the JPEG thumbnail of a punchy frame (default: 4s into
    *  the video, end of the hook with the headline in place). Used as the
-   *  video player's `poster`, the public-docs og:image, and the social
-   *  card preview. Captured client-side after the first render and
-   *  uploaded via POST /api/runs/:id/marketing-video/thumbnail. */
+   *  video player's `poster`, the og:image, and the social card preview.
+   *  Captured client-side after the first render and uploaded via
+   *  POST /api/marketing-videos/:id/thumbnail. */
   thumbnailUrl?: string | null
   /** Storage path of the thumbnail (relative to artifacts bucket). */
   thumbnailPath?: string | null
@@ -268,11 +265,10 @@ export interface GenerateMarketingVideoOptions {
   /** Free-form music style brief used only when musicTrackId === 'ai'.
    *  e.g. "trap drums and synth bass" / "minimal piano, no drums". */
   aiMusicPrompt?: string
-  /** Free-form steering from the user — tells Gemini what angle to take,
-   *  who the target audience is, which feature to emphasize, what tone
-   *  shift to apply. The doc remains the content source-of-truth; this is
-   *  purely a creative brief layered on top.
-   *  Example: "Focus on the AI agent that tests your docs. Audience is
-   *  technical PMs in B2B SaaS. Tone: confident, slightly cheeky."  */
+  /** Free-form steering from the user — angle, audience, feature to
+   *  emphasize, tone shift. Layered on top of the main brief; the brief
+   *  stays the factual ground truth.
+   *  Example: "Audience is technical PMs in B2B SaaS. Tone: confident,
+   *  slightly cheeky. Emphasise time-to-first-render."  */
   userPrompt?: string
 }

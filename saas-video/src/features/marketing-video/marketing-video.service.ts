@@ -150,11 +150,13 @@ const TONE_PRESETS = {
   conversational: { stability: 0.45, style: 0.30, similarityBoost: 0.85 },
 } as const
 
-/** Default branding when the project has no custom design saved. Picked to
- *  produce a usable marketing video out of the box rather than a blank
- *  black-on-white render that looks unfinished. */
+/** Defensive fallback branding when the brand row can't be resolved
+ *  (shouldn't happen — every video carries a brand_id FK — but if it
+ *  ever does, ship something usable instead of a blank render). The
+ *  productName is intentionally neutral; the brand row's name is what
+ *  reaches the renderer in practice. */
 const DEFAULT_BRANDING: MarketingBranding = {
-  productName: 'Doclee',
+  productName: 'Your product',
   accentColor: '#5B5BD6',
   bgColor: '#0B0B0F',
   textColor: '#F5F5F7',
@@ -164,8 +166,8 @@ const DEFAULT_BRANDING: MarketingBranding = {
   radius: 14,
 }
 
-/** Derive a clean origin URL from `project.baseUrl` (which may include a
- *  path, query, or trailing slash). Returns null when baseUrl is empty or
+/** Derive a clean origin URL from `brand.websiteUrl` (which may include a
+ *  path, query, or trailing slash). Returns null when it's empty or
  *  unparseable so the renderer can fall back to its heuristic. */
 function deriveWebsiteUrl(rawBaseUrl: string | null | undefined): string | null {
   if (!rawBaseUrl || rawBaseUrl.trim().length === 0) return null
@@ -177,9 +179,9 @@ function deriveWebsiteUrl(rawBaseUrl: string | null | undefined): string | null 
   }
 }
 
-/** Cheap diacritic + stopword heuristic — same approach as the doc voice-over.
- *  Returns ISO-639 codes since Gemini handles those better than English
- *  language names in the prompt. */
+/** Cheap diacritic + stopword heuristic for picking the script's
+ *  language. Returns ISO-639 codes since the model handles those better
+ *  than English language names in the prompt. */
 function detectLanguage(markdown: string): string {
   if (!markdown || markdown.length < 30) return 'en'
   const text = markdown.toLowerCase()
@@ -209,22 +211,21 @@ function brandToBranding(brand: Brand | null): MarketingBranding {
 }
 
 /**
- * Standalone product never has real screenshots — visualMode is always
- * 'mocks'. Kept as a function (rather than inlining `[]`) so the call sites
- * downstream stay structurally identical to the Doclee source. If we later
- * add a "drop a few screenshots to ground the script" feature, this is the
- * single seam to wire it in.
+ * Marketing videos in this product never have real screenshots — visualMode
+ * is always 'mocks'. Kept as a function (rather than inlining `[]`) so a
+ * future "drop a few screenshots to ground the script" feature has a single
+ * seam to wire into.
  */
 async function collectScreenshots(_videoId: string): Promise<MarketingScreenshot[]> {
   return []
 }
 
 /**
- * Concatenates the script's voice-over chunks (hook + scenes + CTA) into a
- * single narration string for ElevenLabs. We don't synthesize per-scene and
- * stitch with silence padding (like the doc voice-over does) because the
- * marketing video has no fixed timestamps to sync to — Remotion adapts scene
- * durations to the audio it gets, not the other way around.
+ * Concatenates the script's voice-over chunks (hook + scenes + CTA) into
+ * a single narration string for ElevenLabs. We don't synthesize per-scene
+ * and stitch with silence padding because the marketing video has no
+ * fixed timestamps to sync to — Remotion adapts scene durations to the
+ * audio it gets, not the other way around.
  */
 /**
  * Synthesize the marketing voice-over via ElevenLabs and upload to storage.
@@ -277,7 +278,7 @@ function flattenScriptToNarration(script: import('./marketing-video.types.js').M
 }
 
 /**
- * Deterministic, hand-written fallback mock used when every Gemini path
+ * Deterministic, hand-written fallback mock used when every model path
  * (initial generate, rescue retry, Pro→Flash fallback) fails to produce
  * compilable TSX for a scene. Reveals the headline word-by-word against
  * the canvas bgColor — no model, no surprises, no failure mode. Better
@@ -343,13 +344,13 @@ function buildFallbackMockTsx(headline: string): string {
 
 
 /**
- * Full marketing-video pipeline: pulls the doc + branding + screenshots,
- * asks Gemini for a 60s script, synthesizes the narration via ElevenLabs
- * (optional), uploads the audio, and persists a manifest on the run summary.
- *
- * The manifest is what Remotion consumes to render. Server-side render is
- * NOT in this MVP — call `npm run marketing:preview <videoId>` to iterate the
- * template locally with the manifest fed in.
+ * Full marketing-video pipeline. Loads the row + the user's brand, asks
+ * the architect for a 45-second script, has parallel designer calls
+ * compose per-scene TSX, synthesizes the narration via ElevenLabs
+ * (optional), generates / resolves background music, then persists the
+ * manifest. The manifest is what the render service consumes to produce
+ * the final MP4 — that handoff happens separately via
+ * `renderMarketingVideoForRun`.
  */
 export async function generateMarketingVideo(
   videoId: string,
@@ -366,26 +367,25 @@ export async function generateMarketingVideo(
   if (!brief) {
     throw new Error('Marketing video has no brief. The row should never be created without one.')
   }
-  const sourceMarkdown = brief
-  const pageTitle = video.title || 'Marketing video'
+  const title = video.title || 'Marketing video'
 
   const brand = await getBrandById(video.brandId)
   const branding = brandToBranding(brand)
   // Standalone product always uses 'mocks' visualMode — no screenshots.
   const screenshots = await collectScreenshots(videoId)
-  const language = detectLanguage(sourceMarkdown)
+  const language = detectLanguage(brief)
 
   console.log(`[marketing-video] Video ${videoId}: lang=${language}, product="${branding.productName}"`)
 
-  // visualMode is always 'mocks' in standalone — no screenshots to ground
-  // scenes in. Kept as a const (rather than threading options.visualMode)
-  // so the downstream code doesn't have a branch that can never fire.
+  // visualMode is always 'mocks' here — no screenshots to ground scenes
+  // in. Kept as a const (rather than threading options.visualMode) so
+  // the downstream code doesn't have a branch that can never fire.
   const effectiveVisualMode: 'mocks' = 'mocks'
 
   const script = await generateMarketingScript({
     productName: branding.productName,
-    pageTitle,
-    pageMarkdown: sourceMarkdown,
+    title,
+    brief,
     availableScreenshots: screenshots.length,
     screenshotCaptions: screenshots.map((s) => s.caption),
     language,
@@ -663,7 +663,7 @@ async function preflightManifest(manifestUrl: string): Promise<MarketingManifest
  *
  * Use case: user generated, listened, didn't like the voice — they
  * change the picker + tone and click "Update voice" instead of
- * regenerating the whole script (which would burn another Gemini call
+ * regenerating the whole script (which would burn another model call
  * and could change wording).
  */
 export async function updateMarketingVoiceoverForRun(
@@ -785,13 +785,14 @@ export async function updateMarketingManifestForRun(
 /**
  * AI-driven manifest edit. The user types a free-form instruction
  * ("shorten scene 2 by 2 seconds and make it punchier", "switch the
- * accent color to blue", "rewrite the CTA in french") and Gemini
- * returns the updated manifest + a one-line confirmation. Internally
+ * accent color to blue", "rewrite the CTA in french") and the editor
+ * model returns the updated manifest + a one-line confirmation. Internally
  * routes the new manifest through updateMarketingManifestForRun, so
  * the edit goes through the same validation + storage + render-status
  * reset path as a manual JSON edit.
  *
- * Costs: one Gemini Pro call (~€0.04). NOT counted against the
+ * Costs: one Haiku call + N parallel Sonnet calls for changed scenes.
+ * NOT counted against the
  * marketing_video quota — that counter tracks full pipelines (script
  * + voice + music + render). Quota-gated up-front so a hard-cap plan
  * over budget can't iterate either.
@@ -902,7 +903,7 @@ Your response MUST contain a complete \`script\` object with EVERY field present
 
 2. **Dropping per-scene fields.** When you rewrite \`visualBrief\` for a creative refine, you forget to copy \`durationSeconds\` / \`screenshotIndex\` / \`headline\` from the existing scene → validator sees \`undefined\` → edit aborts. Carry every existing field through, then layer your changes on top.
 
-3. **Total duration math.** Doclee derives \`totalDurationSeconds\` from \`hook.durationSeconds + sum(scenes[].durationSeconds) + cta.durationSeconds\`. You MAY omit \`totalDurationSeconds\` entirely; if you include it, an inconsistent value is overridden (no longer rejected). What matters is the per-part durations adding up to ~45s.
+3. **Total duration math.** \`totalDurationSeconds\` is derived from \`hook.durationSeconds + sum(scenes[].durationSeconds) + cta.durationSeconds\`. You MAY omit \`totalDurationSeconds\` entirely; if you include it, an inconsistent value is overridden (no longer rejected). What matters is the per-part durations adding up to ~45s.
 
 4. **Null instead of omit on branding.** \`branding\` is a partial patch: include ONLY the fields you want to change. Don't set unchanged fields to \`null\` to "signal no change". \`{ "branding": { "accentColor": "#0070f3" } }\` is correct. \`{ "branding": { "accentColor": "#0070f3", "bgColor": null } }\` is WRONG. If branding is unchanged, omit the whole \`branding\` key.
 
@@ -1191,10 +1192,10 @@ export async function renderMarketingVideoForRun(
     const manifestContent = await preflightManifest(existing.manifestUrl)
 
     const videoPath = await renderMarketingVideo({
-      // The video-service wire protocol still uses `runId` as the field
-      // name on the render request — pass our videoId in that slot rather
-      // than renaming the protocol (the Remotion render service is shared
-      // with Doclee and shipping a protocol change is out of scope here).
+      // The video-service wire protocol uses `runId` as the field name
+      // on the render request — pass our videoId in that slot rather
+      // than renaming the protocol. The Remotion render service is a
+      // shared deploy and changing its wire format is out of scope here.
       runId: videoId,
       manifestUrl: existing.manifestUrl,
       // Ship the verified manifest content inline so a service-side

@@ -1,8 +1,9 @@
--- Initial schema for the standalone SaaS Video product.
+-- Initial schema.
 --
 -- Three tables, all RLS-isolated per auth.users.id:
 --   brands           — per-user brand identities (logo, colors, font, website)
---   marketing_videos — first-class persistence, replaces Doclee's runs.summary_json.marketingVideo
+--   marketing_videos — one row per generated video; manifest JSONB holds the
+--                      rendered script + branding snapshot
 --   user_credits     — credit-pack balance, decremented on successful render
 
 -- ============================================================
@@ -14,8 +15,8 @@ CREATE TABLE brands (
   name         text NOT NULL,
   logo_url     text,
   logo_path    text,
-  -- Stored as hex strings (#RRGGBB) — same shape Doclee uses, validated by Zod
-  -- at the API boundary so the renderer doesn't need to handle alternate formats.
+  -- Stored as hex strings (#RRGGBB) and validated by Zod at the API
+  -- boundary so the renderer doesn't need to handle alternate formats.
   accent_color text NOT NULL DEFAULT '#5B5BD6',
   bg_color     text NOT NULL DEFAULT '#0B0B0F',
   text_color   text NOT NULL DEFAULT '#F5F5F7',

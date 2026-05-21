@@ -1,7 +1,7 @@
 {
   "name": "saas-video",
   "version": "0.1.0",
-  "description": "AI-generated product videos for SaaS — extracted standalone from Doclee.",
+  "description": "AI-generated product videos for SaaS — write a brief, get a 45-second branded promo.",
   "type": "module",
   "scripts": {
     "build": "tsc && vite build",
@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
-    "@google/generative-ai": "^0.24.1",
     "@sentry/node": "^10.49.0",
     "@sentry/react": "^10.49.0",
     "@supabase/supabase-js": "^2.100.0",

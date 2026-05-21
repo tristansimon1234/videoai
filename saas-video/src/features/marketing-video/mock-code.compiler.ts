@@ -17,7 +17,7 @@ export interface CompiledMock {
 // not on these lists the call resolves to `undefined` at runtime and
 // either renders nothing or throws — both end up as the gradient
 // fallback. We catch those references statically here so the rescue
-// retry path can ask Gemini to fix them.
+// retry path can ask the model to fix them.
 const BRANDING_FIELDS = new Set([
   'productName', 'accentColor', 'bgColor', 'textColor', 'fontFamily',
   // logoUrl is the project's brand mark — exposed at runtime via the

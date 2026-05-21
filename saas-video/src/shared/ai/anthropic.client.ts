@@ -1,14 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { env } from '../config/env.js'
 
-export const STAGEHAND_MODEL = 'anthropic/claude-sonnet-4-20250514'
-
-/** Default model for marketing-video design agents (architect + per-scene
- *  designer + per-scene rescue). Sonnet 4.6 has visibly stronger TSX +
- *  React composition than Gemini Pro, which is the bottleneck on visual
- *  quality for marketing video mocks. Cost is higher per call but
- *  parallel designer calls cap latency at max(scenes) so wall-clock
- *  doesn't change. */
+/** Default model for marketing-video design agents (per-scene designer +
+ *  per-scene rescue). Sonnet 4.6 composes TSX + React noticeably better
+ *  than smaller models, which is the bottleneck on visual quality for
+ *  marketing-video mocks. Cost is higher per call but parallel designer
+ *  calls cap latency at max(scenes) so wall-clock doesn't change. */
 export const SONNET_MODEL = 'claude-sonnet-4-6'
 
 /** Cheap model for structured-output / scripted tasks where the LLM is
@@ -38,10 +35,9 @@ export interface SonnetUsage {
 }
 
 /**
- * Mirror of the gemini.client `generateText` API on Anthropic's Messages
- * endpoint. Used by the marketing-video design agents (architect +
- * per-scene designer + per-scene rescue) so the call sites stay
- * mechanical when switching backends.
+ * Single-call wrapper around Anthropic's Messages endpoint. Used by every
+ * marketing-video design agent (architect skeleton, per-scene designer,
+ * per-scene rescue, AI manifest edit).
  *
  * Two output modes:
  *  - **plain text** (default): returns the assistant's text content as
@@ -58,9 +54,7 @@ export interface SonnetUsage {
  * video sharing the same designer system prompt, the system tokens
  * land in the cache after the first call and the rest read at ~0.1×.
  *
- * Throws if `ANTHROPIC_API_KEY` is unset — this helper is only used by
- * paths that have already opted into Sonnet, never the default doc /
- * chat / Try Doc flows.
+ * Throws if `ANTHROPIC_API_KEY` is unset.
  */
 export async function generateSonnetText(opts: {
   userPrompt: string

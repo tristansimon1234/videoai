@@ -9,16 +9,16 @@ import { marketingVideoRouter } from './features/marketing-video/marketing-video
 import { creditsRouter, stripeWebhookRouter } from './features/credits/credits.routes.js'
 
 /**
- * Express app — same pattern as Doclee's. Routers are mounted with auth
- * applied per-router rather than globally, which makes the public webhook
- * route impossible to accidentally protect (and makes the protected
- * routes impossible to accidentally expose).
+ * Express app builder. Routers are mounted with auth applied per-router
+ * rather than globally, which makes the public webhook route impossible
+ * to accidentally protect (and makes the protected routes impossible to
+ * accidentally expose).
  *
  * Two entry points consume this app:
  *   - src/server.ts        — local dev (calls `mountRoutes(app, '')`)
  *   - api/index.ts         — Vercel serverless function (calls `mountRoutes(app, '/api')`)
  *
- * mountRoutes is exported so both can stay in sync — adding a router is a
+ * `mountRoutes` is exported so both stay in sync — adding a router is a
  * single edit here and propagates to both runtimes.
  */
 export function createApp(): express.Express {

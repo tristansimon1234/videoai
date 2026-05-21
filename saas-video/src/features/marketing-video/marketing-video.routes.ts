@@ -227,7 +227,8 @@ marketingVideoRouter.post('/:id/edit', (req: Request, res: Response, next: NextF
       ensureOwnership(video, userId)
 
       const result = await editMarketingManifestWithAi(video.id, body.data)
-      // Auto re-render after AI edit — same UX as Doclee.
+      // Auto re-render after AI edit so the user sees the change land
+      // without a manual "render" click.
       await renderMarketingVideoForRun(video.id)
       res.status(200).json(result)
     } catch (err) { next(err) }
