@@ -1163,8 +1163,13 @@ export async function renderMarketingVideoForRun(
       'No marketing-video manifest for this run. Generate one first via POST /marketing-video.',
     )
   }
-  if (!existing.manifestUrl) {
-    throw new Error('Manifest exists in DB but has no public URL — cannot render without it.')
+  // `toSummary` doesn't track manifestUrl on the row (the upload path is
+  // deterministic, so we rebuild it here). Match the same `?v=` cache-bust
+  // pattern the initial upload uses so older CDN copies don't get served.
+  const manifestPath = `videos/${videoId}/marketing-manifest.json`
+  const manifestUrl = `${getPublicUrl('artifacts', manifestPath) ?? ''}?v=${Date.now()}`
+  if (!manifestUrl.startsWith('http')) {
+    throw new Error('Cannot resolve manifest public URL — storage bucket may not be public.')
   }
 
   const { isVideoServiceConfigured, renderMarketingVideo } = await import('../../shared/video/video.client.js')
@@ -1188,9 +1193,9 @@ export async function renderMarketingVideoForRun(
     // path, or a stale Supabase signed URL surface only as the cryptic
     // "Unexpected token '<'" the video-service reports back from its
     // own JSON.parse failure. Fail here with a clear, actionable error.
-    console.log(`[marketing-video] Pre-flight: bundle=${remotionServeUrl} manifest=${existing.manifestUrl}`)
+    console.log(`[marketing-video] Pre-flight: bundle=${remotionServeUrl} manifest=${manifestUrl}`)
     await preflightRemotionBundle(remotionServeUrl)
-    const manifestContent = await preflightManifest(existing.manifestUrl)
+    const manifestContent = await preflightManifest(manifestUrl)
 
     const videoPath = await renderMarketingVideo({
       // The video-service wire protocol uses `runId` as the field name
@@ -1198,7 +1203,7 @@ export async function renderMarketingVideoForRun(
       // than renaming the protocol. The Remotion render service is a
       // shared deploy and changing its wire format is out of scope here.
       runId: videoId,
-      manifestUrl: existing.manifestUrl,
+      manifestUrl,
       // Ship the verified manifest content inline so a service-side
       // update can skip its own fetch (which is the most likely source
       // of the cryptic "Unexpected token '<'" the service has been
