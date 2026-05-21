@@ -46,14 +46,17 @@ const EnvSchema = z.object({
 
 export type Env = z.infer<typeof EnvSchema>
 
-// On Vercel, the same Supabase URL is sometimes only set with a VITE_
-// prefix (because the frontend needs it too). Fall back to that so the
-// server boots when only the VITE_-prefixed value is configured.
+// Accept the common Vercel/Supabase naming variants so the server boots
+// without duplicating env vars:
+//  - URL: Vite-prefixed fallback (the same URL is needed by the client).
+//  - Service key: Supabase Dashboard exports it as SUPABASE_SERVICE_ROLE_KEY.
 // The service key must never be VITE_-prefixed — that would bundle it
-// into the client — so we only fall back for the URL.
+// into the client — so no VITE_ fallback for it.
 const rawEnv = {
   ...process.env,
   SUPABASE_URL: process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL,
+  SUPABASE_SERVICE_KEY:
+    process.env.SUPABASE_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY,
 }
 
 export const env: Env = EnvSchema.parse(rawEnv)
