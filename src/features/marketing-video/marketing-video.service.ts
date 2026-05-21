@@ -556,6 +556,7 @@ export async function generateMarketingVideo(
     musicPath,
     musicVolume,
     musicError,
+    format: options.format ?? '16:9',
   }
 
   // Persist the manifest in storage so the render service can fetch by URL

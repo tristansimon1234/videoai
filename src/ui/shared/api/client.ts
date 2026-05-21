@@ -75,6 +75,34 @@ export type VoiceTone =
   | 'punchy' | 'calm' | 'playful' | 'serious'
   | 'confident' | 'inspirational' | 'conversational'
 
+export type VideoFormat = '16:9' | '9:16' | '1:1'
+
+export interface ChatMessageDTO {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export interface ChatQuickReplyDTO {
+  label: string
+  value: string
+}
+
+export interface ChatExtractedBriefDTO {
+  brief: string
+  title?: string
+  format: VideoFormat
+  tone: VoiceTone
+  musicTrackId: string
+  userPrompt?: string
+}
+
+export interface ChatTurnDTO {
+  message: string
+  quickReplies?: ChatQuickReplyDTO[]
+  ready: boolean
+  brief?: ChatExtractedBriefDTO
+}
+
 export interface CreditsDTO {
   balance: number
   totalBought: number
@@ -109,9 +137,12 @@ export const api = {
         musicVolume?: number
         aiMusicPrompt?: string
         userPrompt?: string
+        format?: VideoFormat
       }
     }): Promise<MarketingVideoListItemDTO> =>
       request('/marketing-videos', { method: 'POST', body: JSON.stringify(body) }),
+    chat: (messages: ChatMessageDTO[]): Promise<ChatTurnDTO> =>
+      request('/marketing-videos/chat', { method: 'POST', body: JSON.stringify({ messages }) }),
     delete: (id: string): Promise<void> =>
       request(`/marketing-videos/${id}`, { method: 'DELETE' }),
     voices: (): Promise<{ voices: Array<{ voiceId: string; name: string; category: string }> }> =>

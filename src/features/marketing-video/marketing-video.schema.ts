@@ -191,6 +191,11 @@ export type VoiceTonePreset = z.infer<typeof VoiceTonePresetSchema>
 export const VisualModeSchema = z.enum(['screenshots', 'mocks'])
 export type VisualMode = z.infer<typeof VisualModeSchema>
 
+/** Render aspect ratio. Mirrors VideoFormat in marketing-video.types.ts.
+ *  '16:9' → 1920×1080, '9:16' → 1080×1920, '1:1' → 1080×1080. */
+export const VideoFormatSchema = z.enum(['16:9', '9:16', '1:1'])
+export type VideoFormat = z.infer<typeof VideoFormatSchema>
+
 /** Schema for an incoming manifest update via PUT /:id/marketing-video/manifest.
  *  Same shape as the persisted MarketingManifest but every field beyond the
  *  script is optional — the user typically edits the script (headlines,
@@ -257,4 +262,5 @@ export const GenerateMarketingVideoOptionsSchema = z.object({
    *  tempo, and reference tracks together). */
   aiMusicPrompt: z.string().max(500).optional(),
   userPrompt: z.string().max(800).optional(),
+  format: VideoFormatSchema.optional(),
 })

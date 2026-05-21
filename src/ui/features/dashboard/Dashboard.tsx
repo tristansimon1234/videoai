@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Button, EmptyState, Spinner } from '../../design-system/components/index.js'
 import { api, ApiError, type MarketingVideoListItemDTO, type BrandDTO, type CreditsDTO } from '../../shared/api/client.js'
 import { useAuth } from '../../shared/hooks/useAuth.js'
-import { GenerateModal } from '../generate/GenerateModal.js'
 import styles from './Dashboard.module.css'
 
 /**
@@ -23,8 +22,6 @@ export function Dashboard(): React.ReactElement {
   const [credits, setCredits] = useState<CreditsDTO | null>(null)
   const [brands, setBrands] = useState<BrandDTO[]>([])
   const [loading, setLoading] = useState(true)
-  const [modalOpen, setModalOpen] = useState(false)
-
   const refresh = useCallback(async () => {
     setLoading(true)
     try {
@@ -83,7 +80,7 @@ export function Dashboard(): React.ReactElement {
             variant="primary"
             onClick={() => {
               if (lowCredit) { navigate('/billing'); return }
-              setModalOpen(true)
+              navigate('/generate')
             }}
           >
             {lowCredit ? 'Buy credits' : 'New video'}
@@ -106,13 +103,6 @@ export function Dashboard(): React.ReactElement {
         )}
       </main>
 
-      {modalOpen && credits && (
-        <GenerateModal
-          brands={brands}
-          onClose={() => setModalOpen(false)}
-          onSuccess={() => { setModalOpen(false); void refresh() }}
-        />
-      )}
     </div>
   )
 }

@@ -26,6 +26,7 @@ import {
 import { findBrandById, findDefaultBrandForUser } from '../brand/brand.repository.js'
 import { spendCredit, refundCredit } from '../credits/credits.repository.js'
 import { getAvailableVoices, isElevenLabsConfigured } from '../../shared/ai/elevenlabs.client.js'
+import { runBriefChat } from './marketing-video.chat.js'
 
 export const marketingVideoRouter = Router()
 
@@ -37,6 +38,13 @@ const CreateBodySchema = z.object({
 })
 
 const IdParamSchema = z.object({ id: z.string().uuid() })
+
+const ChatBodySchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().min(1).max(4000),
+  })).max(30),
+})
 
 const EditManifestBodySchema = z.object({
   instruction: z.string().min(1).max(2000),
@@ -60,6 +68,27 @@ function ensureOwnership(video: { userId: string }, userId: string): void {
     throw new NotFoundError('Marketing video')
   }
 }
+
+/**
+ * POST /api/marketing-videos/chat
+ * One round-trip of the brief-collection chat. Stateless: the client
+ * sends the full transcript, the server returns the next assistant turn
+ * (plus, when ready, the structured brief the user can submit via the
+ * normal create endpoint). Authenticated but spends no credits — the
+ * credit is debited by POST /api/marketing-videos on actual generation.
+ */
+marketingVideoRouter.post('/chat', (req: Request, res: Response, next: NextFunction): void => {
+  void (async () => {
+    try {
+      getUserId(req) // auth check; chat is per-user but stateless
+      const body = ChatBodySchema.safeParse(req.body ?? {})
+      if (!body.success) throw new ValidationError(body.error.flatten())
+
+      const turn = await runBriefChat(body.data.messages)
+      res.status(200).json(turn)
+    } catch (err) { next(err) }
+  })()
+})
 
 /**
  * GET /api/marketing-videos

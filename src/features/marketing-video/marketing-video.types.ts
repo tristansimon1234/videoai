@@ -5,6 +5,12 @@
  * service consumes the manifest to produce the final MP4.
  */
 
+/** Render aspect ratio. The string form ("16:9") is what the chat UI and
+ *  the manifest persist; the Remotion render service resolves it to
+ *  width × height (1920×1080 / 1080×1920 / 1080×1080). Optional on the
+ *  manifest for backwards-compat — older manifests default to '16:9'. */
+export type VideoFormat = '16:9' | '9:16' | '1:1'
+
 /** Tone label that maps to a brand-aware color in the renderer. We keep
  *  this as an enum (vs hex codes from the LLM) so mocks always respect
  *  the project's branding + frame contrast. */
@@ -192,6 +198,9 @@ export interface MarketingManifest {
   thumbnailUrl?: string | null
   /** Storage path of the thumbnail (relative to artifacts bucket). */
   thumbnailPath?: string | null
+  /** Aspect ratio of the rendered MP4. Optional for backwards-compat —
+   *  the render service falls back to '16:9' when absent. */
+  format?: VideoFormat
 }
 
 /** Render lifecycle of the MP4. The manifest can exist without a render
@@ -271,4 +280,6 @@ export interface GenerateMarketingVideoOptions {
    *  Example: "Audience is technical PMs in B2B SaaS. Tone: confident,
    *  slightly cheeky. Emphasise time-to-first-render."  */
   userPrompt?: string
+  /** Aspect ratio for the rendered MP4. Defaults to '16:9'. */
+  format?: VideoFormat
 }
