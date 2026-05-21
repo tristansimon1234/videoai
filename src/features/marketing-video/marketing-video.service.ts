@@ -1088,7 +1088,7 @@ Return ONLY valid JSON: { "message": string, "script": <full edited script>, "br
  *  4. Throw — no URL we can derive. */
 function resolveRemotionServeUrl(): string {
   const explicit = process.env.REMOTION_SERVE_URL
-  if (explicit && explicit.length > 0) return explicit
+  if (explicit && explicit.length > 0) return ensureHttps(explicit)
 
   if (process.env.VERCEL_ENV === 'preview') {
     const previewHost = process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL
@@ -1096,10 +1096,19 @@ function resolveRemotionServeUrl(): string {
   }
 
   const publicAppUrl = process.env.PUBLIC_APP_URL
-  if (publicAppUrl) return `${publicAppUrl.replace(/\/+$/, '')}/remotion-bundle`
+  if (publicAppUrl) return `${ensureHttps(publicAppUrl).replace(/\/+$/, '')}/remotion-bundle`
   throw new Error(
     'No Remotion serve URL configured. Set PUBLIC_APP_URL (recommended — the bundle ships with the main deploy via the `prebuild` script) or REMOTION_SERVE_URL.',
   )
+}
+
+/** Tolerate env vars set without a scheme — Railway domains in particular
+ *  are easy to paste bare. fetch() rejects scheme-less URLs with the
+ *  cryptic "Failed to parse URL" error, so normalize here. */
+function ensureHttps(url: string): string {
+  const trimmed = url.trim()
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  return `https://${trimmed.replace(/^\/+/, '')}`
 }
 
 /**
