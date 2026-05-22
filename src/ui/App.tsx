@@ -8,6 +8,7 @@ import { Onboarding } from './features/onboarding/Onboarding.js'
 import { Dashboard } from './features/dashboard/Dashboard.js'
 import { Billing } from './features/billing/Billing.js'
 import { ChatGenerate } from './features/generate/ChatGenerate.js'
+import { VideoDetail } from './features/video/VideoDetail.js'
 
 /**
  * Top-level router. The two-layer split (authed vs anon) keeps the
@@ -36,6 +37,7 @@ export function App(): React.ReactElement {
           <>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/generate" element={<ChatGenerate />} />
+            <Route path="/video/:id" element={<VideoDetail />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/login" element={<Navigate to="/dashboard" replace />} />

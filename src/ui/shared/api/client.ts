@@ -149,6 +149,26 @@ export const api = {
       request('/marketing-videos/_config/voices'),
     musicPresets: (): Promise<{ presets: Array<{ id: string; name: string; mood?: string }> }> =>
       request('/marketing-videos/_config/music-presets'),
+    updateManifest: (id: string, body: {
+      script: unknown
+      branding?: Partial<{
+        productName: string
+        accentColor: string
+        accentSecondary: string
+        bgColor: string
+        textColor: string
+        fontFamily: string
+        logoUrl: string | null
+        websiteUrl: string | null
+        radius: number
+      }>
+      musicVolume?: number
+    }): Promise<MarketingVideoListItemDTO & { manifest: unknown }> =>
+      request(`/marketing-videos/${id}/manifest`, { method: 'PUT', body: JSON.stringify(body) }),
+    updateVoiceover: (id: string, body: { voiceId?: string; tone?: VoiceTone }): Promise<MarketingVideoListItemDTO & { manifest: unknown }> =>
+      request(`/marketing-videos/${id}/voiceover`, { method: 'POST', body: JSON.stringify(body) }),
+    render: (id: string): Promise<MarketingVideoListItemDTO & { manifest: unknown }> =>
+      request(`/marketing-videos/${id}/render`, { method: 'POST', body: JSON.stringify({}) }),
   },
   credits: {
     get: (): Promise<CreditsDTO> => request('/credits'),

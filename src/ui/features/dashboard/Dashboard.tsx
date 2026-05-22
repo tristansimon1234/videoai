@@ -117,10 +117,12 @@ function VideoCard({ item }: { item: MarketingVideoListItemDTO }): React.ReactEl
     failed: 'Failed',
   }
   return (
-    <div className={styles.card}>
+    <Link to={`/video/${item.id}`} className={styles.card} style={{ textDecoration: 'none', color: 'inherit' }}>
       <div className={styles.cardMedia}>
         {item.videoUrl ? (
-          <video controls className={styles.cardVideo} poster={item.thumbnailUrl ?? undefined}>
+          // Inline video preview without controls — the detail page handles
+          // playback. Click on the card navigates instead of starting playback.
+          <video className={styles.cardVideo} poster={item.thumbnailUrl ?? undefined} muted>
             <source src={item.videoUrl} type="video/mp4" />
           </video>
         ) : item.thumbnailUrl ? (
@@ -143,6 +145,6 @@ function VideoCard({ item }: { item: MarketingVideoListItemDTO }): React.ReactEl
         </div>
         {item.renderError && <p className={styles.cardError}>{item.renderError}</p>}
       </div>
-    </div>
+    </Link>
   )
 }
