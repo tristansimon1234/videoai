@@ -286,6 +286,26 @@ const STYLE_SEEDS = [
     label: 'data-density',
     brief: 'Visual mode mix should lean on chart and bento. Show real-looking dashboards, sparklines, multi-card layouts. Use the chart mode at least once with a frame-driven sweep. Abstract beats are limited to one — the rest is "look how much information the product surfaces".',
   },
+  {
+    label: 'brutalist-mono',
+    brief: 'Everything in font-mono. Treat type like a terminal printout: monospace headlines, monospace UI labels, monospace numbers. Hard rectangles, no rounded corners except where the product genuinely needs them. Accent color blocks behave like highlighter strokes on raw paper. Lean abstract — hero-stat and flow-diagram in mono dominate, cap UI scenes at 1.',
+  },
+  {
+    label: 'kinetic-typography',
+    brief: 'The type IS the visual. Each scene revolves around one bold word or phrase scaling from tiny to oversized, sliding across the canvas, or stacking with deliberate kerning collisions. Use hero-stat and logo-hero for two beats minimum. UI scenes appear only as supporting detail behind the type. Headlines should be 3-5 words max — every word earns its space.',
+  },
+  {
+    label: 'editorial-dark',
+    brief: 'Inverted editorial: pure black or near-black background, restrained type at magazine scale, accent color used as a thin underline or single-pixel divider — never as a fill. Mocks render as monochrome line-art with one accent stroke. Feel like the dark-mode landing page of a premium developer tool. Cap UI scenes at 1; favour hero-stat with razor-thin typography.',
+  },
+  {
+    label: 'glass-stack',
+    brief: 'Layered translucent cards with backdrop-blur, soft shadow stacking, and accent color bleeding through frosted panels. Each scene has a clear z-axis: foreground card → mid-layer detail → background gradient. Lean on bento and chart modes with multiple stacked semi-transparent layers. Avoid flat solid fills — every surface has depth.',
+  },
+  {
+    label: 'cinematic-reveal',
+    brief: 'Each scene opens with a tight crop or partial reveal that pulls back / slides open to expose the full composition. Use cursor-click and chat modes for narrative beats — the reveal IS the story. Frame compositions deliberately off-center; let the accent color act like a key light. Mix at least one UI scene with one abstract beat where the reveal feels earned, not gimmicky.',
+  },
 ] as const
 
 /** Pick a style seed for this generation. Deterministic if a seed-id
@@ -1432,7 +1452,7 @@ async function generateSceneMockCode(args: BuildSceneMockPromptArgs): Promise<st
   const result = await generateSonnetText({
     userPrompt,
     maxTokens: MAX_OUT,
-    temperature: 0.7,
+    temperature: 0.75,
   })
   let code = result.text.trim()
 
