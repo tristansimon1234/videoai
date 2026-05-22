@@ -26,7 +26,7 @@ import {
 import { findBrandById, findDefaultBrandForUser } from '../brand/brand.repository.js'
 import { spendCredit, refundCredit } from '../credits/credits.repository.js'
 import { getAvailableVoices, isElevenLabsConfigured } from '../../shared/ai/elevenlabs.client.js'
-import { runBriefChat } from './marketing-video.chat.js'
+import { runAgenticChat } from './marketing-video.chat.js'
 
 export const marketingVideoRouter = Router()
 
@@ -39,11 +39,33 @@ const CreateBodySchema = z.object({
 
 const IdParamSchema = z.object({ id: z.string().uuid() })
 
+/** Chat content blocks — mirror the Anthropic SDK shapes (text /
+ *  tool_use / tool_result). Accepts a plain string for the very first
+ *  turn / legacy clients; the chat module normalizes strings to a single
+ *  text block before forwarding. */
+const ChatContentBlockSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('text'), text: z.string().max(8000) }),
+  z.object({
+    type: z.literal('tool_use'),
+    id: z.string(),
+    name: z.string(),
+    input: z.unknown(),
+  }),
+  z.object({
+    type: z.literal('tool_result'),
+    tool_use_id: z.string(),
+    content: z.string().max(8000),
+  }),
+])
+
 const ChatBodySchema = z.object({
   messages: z.array(z.object({
     role: z.enum(['user', 'assistant']),
-    content: z.string().min(1).max(4000),
-  })).max(30),
+    content: z.union([
+      z.string().min(1).max(4000),
+      z.array(ChatContentBlockSchema).max(40),
+    ]),
+  })).max(40),
 })
 
 const EditManifestBodySchema = z.object({
@@ -84,7 +106,7 @@ marketingVideoRouter.post('/chat', (req: Request, res: Response, next: NextFunct
       const body = ChatBodySchema.safeParse(req.body ?? {})
       if (!body.success) throw new ValidationError(body.error.flatten())
 
-      const turn = await runBriefChat(body.data.messages)
+      const turn = await runAgenticChat(body.data.messages)
       res.status(200).json(turn)
     } catch (err) { next(err) }
   })()

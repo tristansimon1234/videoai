@@ -1,196 +1,235 @@
 /**
- * Conversational brief-collection. Drives the chat-first generate flow:
- * the user describes their product in their own words and Haiku asks
- * targeted follow-ups (audience, value prop, tone, format, …) until it
- * has enough to call the existing pipeline. Returns either the next
- * assistant turn (text + optional quick-reply chips) or, when ready,
- * the structured brief the create route accepts.
+ * Agentic chat for the brief-collection / pre-generation conversation.
  *
- * One round-trip per user message — the UI keeps the full transcript on
- * the client and re-posts it; this keeps the endpoint stateless and
- * cheap to host on Vercel serverless.
+ * Design — the LLM gets a set of tools (think: an MCP server) and decides
+ * for itself when to call them. No scripting from us, no "ask in this
+ * order". Tools expose UI affordances (an editable plan card, suggestion
+ * cards for voice/style, a commit button). The LLM is free to text the
+ * user, ask follow-ups, call multiple tools in one turn, or none at all.
+ *
+ * Wire format — stateless. The client keeps the full transcript and posts
+ * it every turn. Each message has a `role` and a `content` array of
+ * blocks (text / tool_use / tool_result) that mirror Anthropic's content
+ * block shapes. We pass them through to the SDK with minimal massaging.
+ *
+ * Tools exposed:
+ *   - propose_plan: render an editable plan card. User can tweak fields
+ *     and click Generate, or send back a tool_result asking for changes.
+ *   - suggest_voice: render a clickable mini-card for a specific voice.
+ *   - suggest_style: render a clickable mini-card for a style seed.
+ *   - commit_and_generate: launch the pipeline. The frontend transitions
+ *     to the generating view and calls POST /api/marketing-videos.
  */
-import { generateSonnetText, HAIKU_MODEL } from '../../shared/ai/anthropic.client.js'
-import type { VideoFormat } from './marketing-video.schema.js'
-import type { VoiceTone } from './marketing-video.types.js'
+import { anthropic, HAIKU_MODEL } from '../../shared/ai/anthropic.client.js'
+import type Anthropic from '@anthropic-ai/sdk'
 
-export interface ChatMessage {
-  role: 'user' | 'assistant'
+// ============================================================
+// Wire types — what the route accepts / returns. Mirror the
+// Anthropic SDK shapes so we can pass through with minimal work.
+// ============================================================
+
+export type ChatTextBlock = { type: 'text'; text: string }
+export type ChatToolUseBlock = { type: 'tool_use'; id: string; name: string; input: unknown }
+export type ChatToolResultBlock = {
+  type: 'tool_result'
+  tool_use_id: string
+  /** Plain-text payload describing what happened (e.g. "user clicked
+   *  Generate with these fields: …"). The LLM reads this verbatim. */
   content: string
 }
 
-export interface QuickReply {
-  /** Short label displayed on the chip (max ~30 chars for layout). */
-  label: string
-  /** Free-text value sent back as the user's reply when the chip is
-   *  clicked. Usually identical to label, but kept separate so the UI
-   *  can show "Yes" while sending "Yes, generate the video". */
-  value: string
-}
+export type ChatContentBlock = ChatTextBlock | ChatToolUseBlock | ChatToolResultBlock
 
-/** Structured brief — what the create route expects after the chat is
- *  done. Fields mirror what the existing pipeline already accepts so we
- *  can drop straight into `POST /api/marketing-videos`. */
-export interface ExtractedBrief {
-  /** 1-3 sentence product description that becomes the architect's input. */
-  brief: string
-  /** Short title for the row in the gallery — derived from the product
-   *  name. Optional; the create route falls back to a date string. */
-  title?: string
-  /** Aspect ratio the user picked. */
-  format: VideoFormat
-  /** Voice-over tone preset. Defaults to 'confident'. */
-  tone: VoiceTone
-  /** Music style — one of the AI_MUSIC_STYLES ids or 'none'. */
-  musicTrackId: string
-  /** Extra steering forwarded to the architect — audience + angle the
-   *  chat captured but that doesn't fit the brief proper. */
-  userPrompt?: string
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  /** Either a plain string (legacy / first user turn) or an array of
+   *  blocks. The route normalizes strings to a single text block. */
+  content: string | ChatContentBlock[]
 }
 
 export interface ChatTurn {
-  /** Markdown the UI renders as the assistant bubble. */
-  message: string
-  /** Optional chips below the bubble. The UI sends `value` back as a
-   *  user message when one is clicked. */
-  quickReplies?: QuickReply[]
-  /** True when the assistant has enough info to generate. The UI
-   *  switches to a confirm-and-go state and `brief` is non-null. */
-  ready: boolean
-  /** Populated when ready=true. */
-  brief?: ExtractedBrief
+  /** Assistant message split into renderable blocks. Text blocks become
+   *  chat bubbles; tool_use blocks become interactive cards. */
+  blocks: Array<ChatTextBlock | ChatToolUseBlock>
+  /** Anthropic stop_reason for the turn. */
+  stopReason: string
 }
 
-const SYSTEM_PROMPT = `You are a friendly creative director helping a founder turn a one-sentence pitch into a 45-second marketing video. Your job is to collect ONLY what the generator needs and then hand off — do not over-interview.
+// ============================================================
+// Tool catalog — these are the only ways the LLM can drive the UI.
+// Names + descriptions are read by the LLM to decide when to call.
+// ============================================================
 
-# How you talk
-- Warm, concise, one idea per message. Never more than 2 questions per turn.
-- Match the user's language (if they write French, reply French; same for any other language).
-- No filler ("Great question!", "Awesome!", "Got it, so…"). Get to the point.
-- Never invent details about the product. If the user is vague, ask.
+const VIDEO_FORMATS = ['16:9', '9:16', '1:1'] as const
+const VOICE_TONES = [
+  'confident', 'punchy', 'playful', 'calm', 'serious', 'inspirational', 'conversational',
+] as const
+const MUSIC_TRACK_IDS = [
+  'ai-cinematic', 'ai-upbeat', 'ai-inspirational', 'ai-lofi', 'ai-tech', 'ai-ambient', 'none',
+] as const
+export const STYLE_SEED_LABELS = [
+  'editorial', 'product-tour', 'metric-driven', 'process-flow',
+  'brand-first', 'conversational', 'high-contrast', 'data-density',
+] as const
 
-# What you must collect, in priority order
-1. **What the product is** — name + one-line description (what it does, for who). This is the hardest blocker; if missing, ask first.
-2. **Aspect ratio** — 16:9 (YouTube, web), 9:16 (TikTok, Reels, Shorts), or 1:1 (Instagram, LinkedIn feed). ALWAYS offer all three as quick replies the first time you ask.
-3. **Audience + the one thing to emphasize** — who it's for and what to put forward (speed? quality? price? a specific feature?). One question, free text.
-4. **Tone of voice-over** — offer "confident", "punchy", "playful", "calm", "inspirational" as quick replies. Default to confident if user is unsure.
-5. **Music style** — offer "Cinematic", "Upbeat", "Inspirational", "Lo-fi", "Tech", "Ambient", "No music" as quick replies.
-
-# Quick replies (chips)
-- ALWAYS attach quick replies when the next question has a clear small set of options (format, tone, music). They speed the user up massively.
-- For free-text questions (what the product is, audience), do NOT add quick replies — let them type.
-- Each chip: short label (≤ 25 chars) + the literal value to send as the user message.
-
-# When to finish
-- The moment you have items 1-5, finish. Do NOT ask for "anything else?" — that's friction.
-- On the finishing turn, set ready=true and fill the brief object. The "message" on that turn is a single-sentence recap (e.g. "Got it — generating a 9:16 punchy video for [product] highlighting [angle]. Hold on ~3 minutes."). Do NOT ask for confirmation; the UI handles that.
-
-# Brief field rules (when ready=true)
-- "brief": 2-3 sentences. First sentence is what the product is. Second adds audience + the one thing to emphasize. Third is optional, only if the user gave a concrete proof-point.
-- "title": short, 2-5 words, derived from the product name.
-- "format": "16:9" | "9:16" | "1:1" — exact strings.
-- "tone": "confident" | "punchy" | "playful" | "calm" | "serious" | "inspirational" | "conversational".
-- "musicTrackId": "ai-cinematic" | "ai-upbeat" | "ai-inspirational" | "ai-lofi" | "ai-tech" | "ai-ambient" | "none".
-- "userPrompt": optional. Use it to forward audience + emphasis as steering for the architect.
-
-# Edge cases
-- If the user types something completely off-topic (asking about pricing, refunds, etc.), redirect in one line back to the brief.
-- If the user wants to skip a step ("just do it", "you decide"), pick a sensible default and move on instead of pushing back.
-- If the conversation has gone past ~8 turns without finishing, finish with whatever you have — defaults beat dragging it out.
-
-# Output
-You MUST call the \`submit_turn\` tool with your full response. Never write prose outside the tool call.`
-
-const TURN_TOOL_SCHEMA = {
+const PLAN_INPUT_SCHEMA = {
   type: 'object',
   properties: {
-    message: {
-      type: 'string',
-      description: 'The assistant message to display in the chat bubble. One short paragraph, no markdown headers.',
-    },
-    quickReplies: {
-      type: 'array',
-      description: 'Optional chips below the bubble. Up to 7. Omit for free-text questions.',
-      maxItems: 7,
-      items: {
-        type: 'object',
-        properties: {
-          label: { type: 'string', description: 'Chip label shown to the user (≤ 25 chars).' },
-          value: { type: 'string', description: 'What to send back as the user reply when clicked.' },
-        },
-        required: ['label', 'value'],
-      },
-    },
-    ready: {
-      type: 'boolean',
-      description: 'True only when you have all 5 required fields and are handing off to the generator.',
-    },
     brief: {
-      type: 'object',
-      description: 'Populated ONLY when ready=true.',
-      properties: {
-        brief: { type: 'string' },
-        title: { type: 'string' },
-        format: { type: 'string', enum: ['16:9', '9:16', '1:1'] },
-        tone: {
-          type: 'string',
-          enum: ['confident', 'punchy', 'playful', 'calm', 'serious', 'inspirational', 'conversational'],
-        },
-        musicTrackId: {
-          type: 'string',
-          enum: ['ai-cinematic', 'ai-upbeat', 'ai-inspirational', 'ai-lofi', 'ai-tech', 'ai-ambient', 'none'],
-        },
-        userPrompt: { type: 'string' },
-      },
-      required: ['brief', 'format', 'tone', 'musicTrackId'],
+      type: 'string',
+      description: '2-3 sentence factual description of the product (what it is, who for, one strong angle). Becomes the architect input.',
+    },
+    title: { type: 'string', description: 'Short 2-5 word title for the gallery row.' },
+    format: { type: 'string', enum: [...VIDEO_FORMATS] },
+    tone: { type: 'string', enum: [...VOICE_TONES] },
+    musicTrackId: { type: 'string', enum: [...MUSIC_TRACK_IDS] },
+    aiMusicPrompt: {
+      type: 'string',
+      description: 'Optional free-text music brief, only meaningful when musicTrackId is "ai-*".',
+    },
+    styleSeed: {
+      type: 'string',
+      description: 'Optional visual style label. One of: ' + STYLE_SEED_LABELS.join(', ') + '. Drives the designer\'s visual vocabulary.',
+    },
+    userPrompt: {
+      type: 'string',
+      description: 'Optional extra steering for the architect (audience, emphasis, tone shift) that doesn\'t belong in the factual brief.',
     },
   },
-  required: ['message', 'ready'],
+  required: ['brief', 'format', 'tone', 'musicTrackId'],
 } as const
 
-/**
- * One turn of the brief-collection chat. Pass the entire transcript so
- * far (user + assistant messages); the function returns the next
- * assistant turn. When the transcript is empty, returns the opening
- * question.
- */
-export async function runBriefChat(messages: ChatMessage[]): Promise<ChatTurn> {
-  // Render the transcript as a single user prompt so the model gets the
-  // full picture in one go. (We could use real multi-turn messages here,
-  // but a flat transcript keeps the helper signature simple and the
-  // prompt cache stable on the system block.)
-  const transcript = messages.length === 0
-    ? '[Start of conversation — open with the first question.]'
-    : messages.map((m) => `${m.role === 'user' ? 'USER' : 'ASSISTANT'}: ${m.content}`).join('\n\n')
+const TOOLS: Anthropic.Tool[] = [
+  {
+    name: 'propose_plan',
+    description:
+      'Render an editable plan card in the chat with every field needed to launch generation. The user can tweak any field inline and click Generate, or reply asking for changes. Call this when you have enough info for a coherent first draft — do not wait for every detail to be perfect, the user can edit the card.',
+    input_schema: PLAN_INPUT_SCHEMA as unknown as Anthropic.Tool.InputSchema,
+  },
+  {
+    name: 'suggest_voice',
+    description:
+      'Suggest a specific voice id with a short reason. Renders a clickable mini-card. Use when you have a strong opinion ("for this product I\'d use a calm female voice"). The user clicks to accept; you can also just include the voiceId directly in propose_plan instead.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        voiceId: { type: 'string', description: 'ElevenLabs voice id.' },
+        voiceName: { type: 'string', description: 'Human-readable voice name to show in the card.' },
+        reason: { type: 'string', description: 'One-sentence rationale shown on the card.' },
+      },
+      required: ['voiceId'],
+    } as unknown as Anthropic.Tool.InputSchema,
+  },
+  {
+    name: 'suggest_style',
+    description:
+      'Suggest a visual style seed with a reason. Renders a clickable mini-card. Valid styleSeed values: ' + STYLE_SEED_LABELS.join(', ') + '. Click accepts the suggestion; you can also bake the seed into propose_plan directly.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        styleSeed: { type: 'string', enum: [...STYLE_SEED_LABELS] },
+        reason: { type: 'string' },
+      },
+      required: ['styleSeed'],
+    } as unknown as Anthropic.Tool.InputSchema,
+  },
+  {
+    name: 'commit_and_generate',
+    description:
+      'Lock in the plan and launch the generation pipeline. The frontend immediately spends 1 credit, calls POST /api/marketing-videos, and switches to the generating view. Call this ONLY after the user has explicitly confirmed (clicked Generate on a plan card, said "go", "do it", etc.). If the user is still iterating, call propose_plan instead.',
+    input_schema: PLAN_INPUT_SCHEMA as unknown as Anthropic.Tool.InputSchema,
+  },
+]
 
-  const { text } = await generateSonnetText({
-    model: HAIKU_MODEL,
-    systemPrompt: SYSTEM_PROMPT,
-    userPrompt: transcript,
-    maxTokens: 800,
-    temperature: 0.5,
-    jsonSchema: TURN_TOOL_SCHEMA as unknown as Record<string, unknown>,
-  }).catch((err: unknown) => {
-    // The SDK retries 529 / 5xx itself (we bumped maxRetries to 4 on
-    // the client). If it still bubbles up here, the chat falls back to
-    // a polite "try again" so the UI doesn't surface the raw 529 to
-    // the user — the transcript stays intact so a retry resumes where
-    // they left off.
+// ============================================================
+// System prompt — deliberately short. The contract is the tools,
+// not the prose. We don't script the conversation.
+// ============================================================
+
+const SYSTEM_PROMPT = `You help a user create a 45-second marketing video for their product. You have these tools:
+
+- propose_plan: render an editable plan card (brief, format, tone, music, style). Use when you have a coherent draft — the user edits inline.
+- suggest_voice / suggest_style: render a small clickable suggestion card. Optional — use when you have a strong opinion.
+- commit_and_generate: launch the pipeline. Call ONLY after the user has explicitly confirmed.
+
+Be brief and natural. Match the user's language. Don't ask for every detail before proposing a plan — propose early, the user will edit. You decide the rhythm.`
+
+// ============================================================
+// Driver — one turn of the conversation.
+// ============================================================
+
+/**
+ * Normalize the incoming transcript into Anthropic's expected shape.
+ * Strings become single text blocks; explicit block arrays pass through
+ * (with light coercion for fields the client may have renamed).
+ */
+function normalizeMessages(messages: ChatMessage[]): Anthropic.MessageParam[] {
+  return messages.map((m) => {
+    if (typeof m.content === 'string') {
+      return { role: m.role, content: m.content }
+    }
+    const content = m.content.map((b): Anthropic.ContentBlockParam => {
+      if (b.type === 'text') return { type: 'text', text: b.text }
+      if (b.type === 'tool_use') return { type: 'tool_use', id: b.id, name: b.name, input: b.input as object }
+      if (b.type === 'tool_result') return { type: 'tool_result', tool_use_id: b.tool_use_id, content: b.content }
+      throw new Error(`Unknown chat block type: ${(b as { type: string }).type}`)
+    })
+    return { role: m.role, content }
+  })
+}
+
+/**
+ * Run one assistant turn against the chat tools. Returns the assistant's
+ * blocks (text + tool_use). On transient Anthropic errors (529 / 503 /
+ * 429) returns a soft fallback so the UI doesn't surface the raw error.
+ */
+export async function runAgenticChat(messages: ChatMessage[]): Promise<ChatTurn> {
+  if (!anthropic) {
+    throw new Error('ANTHROPIC_API_KEY is not configured')
+  }
+
+  const apiMessages = normalizeMessages(messages)
+  // Seed an empty conversation with a user prompt so Anthropic accepts
+  // the call (the API requires at least one user message).
+  if (apiMessages.length === 0) {
+    apiMessages.push({ role: 'user', content: '[Start of conversation]' })
+  }
+
+  try {
+    const response = await anthropic.messages.create({
+      model: HAIKU_MODEL,
+      max_tokens: 1200,
+      temperature: 0.5,
+      system: [{
+        type: 'text',
+        text: SYSTEM_PROMPT,
+        cache_control: { type: 'ephemeral' },
+      }],
+      tools: TOOLS,
+      messages: apiMessages,
+    })
+
+    const blocks: ChatTurn['blocks'] = []
+    for (const b of response.content) {
+      if (b.type === 'text') {
+        if (b.text.trim().length > 0) blocks.push({ type: 'text', text: b.text })
+      } else if (b.type === 'tool_use') {
+        blocks.push({ type: 'tool_use', id: b.id, name: b.name, input: b.input })
+      }
+      // Other block types (thinking, server_tool_use, …) aren't expected
+      // here — silently drop.
+    }
+
+    return { blocks, stopReason: response.stop_reason ?? 'end_turn' }
+  } catch (err) {
     const status = (err as { status?: number })?.status
     if (status === 529 || status === 503 || status === 429) {
       console.warn(`[chat] Anthropic transient ${status}; returning soft fallback`)
-      return { text: '' }
+      return {
+        blocks: [{ type: 'text', text: "I'm a bit overloaded right now — try again in a few seconds." }],
+        stopReason: 'transient_error',
+      }
     }
     throw err
-  })
-
-  if (!text) {
-    return {
-      message: "Hmm, je sature un peu là — réessaie dans 5 secondes ?",
-      ready: false,
-    }
   }
-
-  const parsed = JSON.parse(text) as ChatTurn
-  return parsed
 }

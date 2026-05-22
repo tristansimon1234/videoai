@@ -282,4 +282,9 @@ export interface GenerateMarketingVideoOptions {
   userPrompt?: string
   /** Aspect ratio for the rendered MP4. Defaults to '16:9'. */
   format?: VideoFormat
+  /** Optional STYLE_SEEDS label or free-text brief overriding the
+   *  architect's random pick. Use a known label (editorial / brutalist
+   *  / data-density / …) to inherit the matching vibe, or a longer
+   *  free-text brief that the designer reads verbatim. */
+  styleSeed?: string
 }

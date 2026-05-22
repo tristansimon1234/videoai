@@ -397,6 +397,16 @@ export async function generateMarketingVideo(
     userPrompt: options.userPrompt,
   })
 
+  // User-provided styleSeed (typed in the chat or picked via the
+  // suggest_style tool) overrides the architect's random pick. The
+  // per-scene designer agents read script.styleSeed at render time to
+  // pick their visual vocabulary; overriding the label here is enough
+  // to propagate the user's choice to every scene without re-running
+  // the architect.
+  if (options.styleSeed && options.styleSeed.trim().length > 0) {
+    script.styleSeed = options.styleSeed.trim()
+  }
+
   // Derive total from the parts so a script with a stale / missing
   // `totalDurationSeconds` stays internally consistent. Snapshot it back
   // onto the script so the persisted manifest carries an authoritative

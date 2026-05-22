@@ -237,3 +237,118 @@
 @media (max-width: 600px) {
   .confirmGrid { grid-template-columns: 1fr; }
 }
+
+/* Plan card — editable tool card the LLM proposes inline. */
+.planCard {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-width: 80%;
+}
+
+.planCard.stale {
+  opacity: 0.55;
+}
+
+.planCardHeader {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted-fg);
+  font-weight: 600;
+}
+
+.planRow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.planLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted-fg);
+  font-weight: 600;
+}
+
+.planField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planSelect, .planInput, .planTextarea {
+  flex: 1;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: var(--text-sm);
+  color: var(--color-fg);
+  font-family: inherit;
+}
+
+.planTextarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.planActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.planGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-sm);
+}
+
+.suggestionCard {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 80%;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.suggestionCard:hover {
+  border-color: var(--color-accent, #2563eb);
+}
+
+.suggestionCard.accepted {
+  border-color: var(--color-accent, #2563eb);
+  background: var(--color-accent-soft, rgba(37, 99, 235, 0.08));
+}
+
+.suggestionLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted-fg);
+  font-weight: 600;
+}
+
+.suggestionTitle {
+  font-size: var(--text-sm);
+  color: var(--color-fg);
+  font-weight: 600;
+}
+
+.suggestionReason {
+  font-size: var(--text-xs);
+  color: var(--color-muted-fg);
+  line-height: 1.4;
+}

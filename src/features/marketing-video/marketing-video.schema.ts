@@ -263,4 +263,9 @@ export const GenerateMarketingVideoOptionsSchema = z.object({
   aiMusicPrompt: z.string().max(500).optional(),
   userPrompt: z.string().max(800).optional(),
   format: VideoFormatSchema.optional(),
+  /** Optional STYLE_SEEDS label override. When set, the architect's
+   *  random pick is overridden with this label and the designer agents
+   *  inherit the matching vibe brief. Free-text values (>= 8 chars,
+   *  not a known label) are treated as a custom brief. */
+  styleSeed: z.string().max(600).optional(),
 })

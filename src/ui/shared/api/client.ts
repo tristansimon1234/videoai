@@ -77,30 +77,36 @@ export type VoiceTone =
 
 export type VideoFormat = '16:9' | '9:16' | '1:1'
 
+// Chat content blocks — mirror the Anthropic SDK shapes. Text blocks
+// render as bubbles; tool_use blocks render as interactive UI cards
+// (PlanCard, suggestion cards); tool_result blocks carry the user's
+// reply to a tool call back into the next assistant turn.
+export type ChatTextBlockDTO = { type: 'text'; text: string }
+export type ChatToolUseBlockDTO = { type: 'tool_use'; id: string; name: string; input: unknown }
+export type ChatToolResultBlockDTO = { type: 'tool_result'; tool_use_id: string; content: string }
+export type ChatContentBlockDTO = ChatTextBlockDTO | ChatToolUseBlockDTO | ChatToolResultBlockDTO
+
 export interface ChatMessageDTO {
   role: 'user' | 'assistant'
-  content: string
+  content: string | ChatContentBlockDTO[]
 }
 
-export interface ChatQuickReplyDTO {
-  label: string
-  value: string
+export interface ChatTurnDTO {
+  /** Assistant blocks for this turn — text and/or tool_use. */
+  blocks: Array<ChatTextBlockDTO | ChatToolUseBlockDTO>
+  stopReason: string
 }
 
-export interface ChatExtractedBriefDTO {
+/** Input shape the LLM puts into propose_plan / commit_and_generate. */
+export interface ChatPlanInput {
   brief: string
   title?: string
   format: VideoFormat
   tone: VoiceTone
   musicTrackId: string
+  aiMusicPrompt?: string
+  styleSeed?: string
   userPrompt?: string
-}
-
-export interface ChatTurnDTO {
-  message: string
-  quickReplies?: ChatQuickReplyDTO[]
-  ready: boolean
-  brief?: ChatExtractedBriefDTO
 }
 
 export interface CreditsDTO {
@@ -138,6 +144,7 @@ export const api = {
         aiMusicPrompt?: string
         userPrompt?: string
         format?: VideoFormat
+        styleSeed?: string
       }
     }): Promise<MarketingVideoListItemDTO> =>
       request('/marketing-videos', { method: 'POST', body: JSON.stringify(body) }),
