@@ -16,9 +16,12 @@ export const SONNET_MODEL = 'claude-sonnet-4-6'
  *  composition is where Sonnet's edge actually shows. */
 export const HAIKU_MODEL = 'claude-haiku-4-5'
 
-// Anthropic — optional fallback
+// Anthropic — optional fallback. maxRetries bumped from the SDK default
+// (2) to 4 so transient 529 "overloaded" responses during the peak
+// hours don't fail the chat / architect calls on the user. The SDK
+// already does exponential backoff between retries.
 export const anthropic = env.ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
+  ? new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 4 })
   : null
 
 export interface SonnetUsage {

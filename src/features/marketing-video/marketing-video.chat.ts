@@ -170,13 +170,23 @@ export async function runBriefChat(messages: ChatMessage[]): Promise<ChatTurn> {
     maxTokens: 800,
     temperature: 0.5,
     jsonSchema: TURN_TOOL_SCHEMA as unknown as Record<string, unknown>,
+  }).catch((err: unknown) => {
+    // The SDK retries 529 / 5xx itself (we bumped maxRetries to 4 on
+    // the client). If it still bubbles up here, the chat falls back to
+    // a polite "try again" so the UI doesn't surface the raw 529 to
+    // the user — the transcript stays intact so a retry resumes where
+    // they left off.
+    const status = (err as { status?: number })?.status
+    if (status === 529 || status === 503 || status === 429) {
+      console.warn(`[chat] Anthropic transient ${status}; returning soft fallback`)
+      return { text: '' }
+    }
+    throw err
   })
 
   if (!text) {
-    // The model didn't emit a tool call — return a soft fallback so the
-    // UI doesn't lock up. Surfaces as a generic "please rephrase".
     return {
-      message: "Sorry, I missed that — can you rephrase?",
+      message: "Hmm, je sature un peu là — réessaie dans 5 secondes ?",
       ready: false,
     }
   }
