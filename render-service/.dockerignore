@@ -1,8 +1,0 @@
-node_modules
-dist
-remotion-bundle
-.git
-.env
-.env.*
-*.log
-README.md
