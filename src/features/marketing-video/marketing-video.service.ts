@@ -1088,7 +1088,7 @@ Return ONLY valid JSON: { "message": string, "script": <full edited script>, "br
  *  4. Throw — no URL we can derive. */
 function resolveRemotionServeUrl(): string {
   const explicit = process.env.REMOTION_SERVE_URL
-  if (explicit && explicit.length > 0) return ensureHttps(explicit)
+  if (explicit && explicit.length > 0) return ensureHttps(explicit).replace(/\/+$/, '')
 
   if (process.env.VERCEL_ENV === 'preview') {
     const previewHost = process.env.VERCEL_BRANCH_URL || process.env.VERCEL_URL
