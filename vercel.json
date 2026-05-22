@@ -1,6 +1,7 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "node scripts/bundle-remotion.mjs && node scripts/copy-remotion-bundle.mjs && npm run build",
   "outputDirectory": "dist/client",
+  "framework": "vite",
   "functions": {
     "api/index.ts": {
       "maxDuration": 300
@@ -8,6 +9,7 @@
   },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
+    { "source": "/remotion-bundle/(.*)", "destination": "/remotion-bundle/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

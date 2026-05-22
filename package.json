@@ -4,7 +4,6 @@
   "description": "AI-generated product videos for SaaS — write a brief, get a 45-second branded promo.",
   "type": "module",
   "scripts": {
-    "prebuild": "npm run remotion:bundle && node scripts/copy-remotion-bundle.mjs",
     "build": "tsc && vite build",
     "dev:server": "node --loader ts-node/esm src/server.ts",
     "dev:client": "vite",
