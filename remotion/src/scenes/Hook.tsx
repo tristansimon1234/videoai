@@ -15,7 +15,16 @@ interface HookProps {
  */
 export const Hook: React.FC<HookProps> = ({ headline, branding }) => {
   const frame = useCurrentFrame()
-  const { fps } = useVideoConfig()
+  const { fps, width, height } = useVideoConfig()
+  // Anchor all on-canvas sizing to the short side so the layout reads
+  // the same regardless of aspect ratio (16:9 / 9:16 / 1:1).
+  const shortSide = Math.min(width, height)
+  const sidePadding = Math.round(width * 0.0625)
+  const logoHeight = Math.round(shortSide * 0.13)
+  const logoMaxWidth = Math.round(width * 0.27)
+  const productNameSize = Math.round(shortSide * 0.052)
+  const headlineSize = Math.round(shortSide * 0.102)
+  const headlineMaxWidth = Math.round(width * 0.73)
 
   // Logo reveal: scales in, settles, then drifts up slightly to make
   // room for the headline.
@@ -63,17 +72,17 @@ export const Hook: React.FC<HookProps> = ({ headline, branding }) => {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '0 120px',
-          gap: 48,
+          padding: `0 ${sidePadding}px`,
+          gap: Math.round(shortSide * 0.045),
         }}
       >
         {branding.logoUrl ? (
           <Img
             src={branding.logoUrl}
             style={{
-              height: 140,
+              height: logoHeight,
               width: 'auto',
-              maxWidth: 520,
+              maxWidth: logoMaxWidth,
               objectFit: 'contain',
               opacity: logoOpacity,
               transform: `scale(${logoScale}) translateY(${logoDrift}px)`,
@@ -86,7 +95,7 @@ export const Hook: React.FC<HookProps> = ({ headline, branding }) => {
           <span
             style={{
               fontFamily: `${branding.fontFamily}, 'Geist', system-ui, sans-serif`,
-              fontSize: 56, fontWeight: 700, letterSpacing: '-0.02em',
+              fontSize: productNameSize, fontWeight: 700, letterSpacing: '-0.02em',
               color: branding.accentColor,
               opacity: logoOpacity,
               transform: `scale(${logoScale}) translateY(${logoDrift}px)`,
@@ -100,13 +109,13 @@ export const Hook: React.FC<HookProps> = ({ headline, branding }) => {
           style={{
             color: branding.textColor,
             fontFamily: `${branding.fontFamily}, 'Geist', system-ui, sans-serif`,
-            fontSize: 110,
+            fontSize: headlineSize,
             fontWeight: 700,
             lineHeight: 1.05,
             letterSpacing: '-0.03em',
             textAlign: 'center',
             margin: 0,
-            maxWidth: 1400,
+            maxWidth: headlineMaxWidth,
             opacity: headlineOpacity,
             transform: `translateY(${headlineY}px)`,
           }}

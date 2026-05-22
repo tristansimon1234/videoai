@@ -45,7 +45,19 @@ const LAYOUT_CYCLE: LayoutVariant[] = ['split-left', 'split-right', 'stacked']
 
 export const FeatureScene: React.FC<FeatureSceneProps> = ({ scene, screenshot, branding, sceneIndex }) => {
   const frame = useCurrentFrame()
-  const { fps, durationInFrames } = useVideoConfig()
+  const { fps, durationInFrames, width, height } = useVideoConfig()
+  const isPortrait = height > width
+  const shortSide = Math.min(width, height)
+  const sidePadding = Math.round(width * 0.052)
+  // In landscape (16:9): text takes ~37.5% of width left/right, visual takes ~48% on the opposite side.
+  // In portrait/square the split layout collapses to 'stacked' below.
+  const textBlockWidth = Math.round(width * 0.375)
+  const visualBlockWidth = Math.round(width * 0.48)
+  const visualBlockHeight = Math.round(height * 0.537)
+  // Stacked layout — visual is wider, lives below the text.
+  const stackedVisualWidth = Math.round(width * (isPortrait ? 0.88 : 0.667))
+  const stackedVisualHeight = Math.round(height * (isPortrait ? 0.5 : 0.537))
+  const stackedTopOffset = Math.round(height * 0.074)
 
   const textIn = spring({ frame: frame - 4, fps, config: { damping: 18, stiffness: 90 } })
   const imgIn = spring({ frame: frame - 12, fps, config: { damping: 18, stiffness: 90 } })
@@ -86,9 +98,15 @@ export const FeatureScene: React.FC<FeatureSceneProps> = ({ scene, screenshot, b
   // on the explicit boolean. New callers should pass `headlinePanel`.
   const headlinePanelOff =
     scene.headlinePanel === false || scene.framing === 'fullbleed-total'
+  const cycledLayout = LAYOUT_CYCLE[sceneIndex % LAYOUT_CYCLE.length]!
+  // Side-by-side layouts assume a wide canvas. In portrait/square, force
+  // stacked so the text and visual each get a comfortable share of the
+  // short side instead of being squished side-by-side.
   const layout: LayoutVariant = headlinePanelOff
     ? 'fullbleed-total'
-    : LAYOUT_CYCLE[sceneIndex % LAYOUT_CYCLE.length]!
+    : isPortrait
+      ? 'stacked'
+      : cycledLayout
 
   // Visual priority for the scene:
   //   1. template → structured JSON, fixed React component (preferred).
@@ -121,6 +139,8 @@ export const FeatureScene: React.FC<FeatureSceneProps> = ({ scene, screenshot, b
       alignment={alignment}
       headlineY={headlineY}
       headlineOpacity={headlineOpacity}
+      shortSide={shortSide}
+      canvasWidth={width}
     />
   )
 
@@ -152,10 +172,10 @@ export const FeatureScene: React.FC<FeatureSceneProps> = ({ scene, screenshot, b
       {layout === 'split-left' && (
         <>
           {!usingMock && <AbsoluteFill style={{ background: `radial-gradient(ellipse at 80% 50%, ${branding.accentColor}22 0%, transparent 65%)`, opacity: fadeOut }} />}
-          <div style={{ position: 'absolute', left: 100, top: 0, bottom: 0, width: 720, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', left: sidePadding, top: 0, bottom: 0, width: textBlockWidth, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             {textBlock('left')}
           </div>
-          <div style={{ position: 'absolute', right: 100, top: '50%', width: 920, height: 580, marginTop: -290, opacity: imgOpacity, transform: `translateX(${interpolate(imgIn, [0, 1], [80, 0])}px)` }}>
+          <div style={{ position: 'absolute', right: sidePadding, top: '50%', width: visualBlockWidth, height: visualBlockHeight, marginTop: -Math.round(visualBlockHeight / 2), opacity: imgOpacity, transform: `translateX(${interpolate(imgIn, [0, 1], [80, 0])}px)` }}>
             {visualElement}
           </div>
         </>
@@ -164,10 +184,10 @@ export const FeatureScene: React.FC<FeatureSceneProps> = ({ scene, screenshot, b
       {layout === 'split-right' && (
         <>
           {!usingMock && <AbsoluteFill style={{ background: `radial-gradient(ellipse at 20% 50%, ${branding.accentColor}22 0%, transparent 65%)`, opacity: fadeOut }} />}
-          <div style={{ position: 'absolute', right: 100, top: 0, bottom: 0, width: 720, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ position: 'absolute', right: sidePadding, top: 0, bottom: 0, width: textBlockWidth, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
             {textBlock('right')}
           </div>
-          <div style={{ position: 'absolute', left: 100, top: '50%', width: 920, height: 580, marginTop: -290, opacity: imgOpacity, transform: `translateX(${interpolate(imgIn, [0, 1], [-80, 0])}px)` }}>
+          <div style={{ position: 'absolute', left: sidePadding, top: '50%', width: visualBlockWidth, height: visualBlockHeight, marginTop: -Math.round(visualBlockHeight / 2), opacity: imgOpacity, transform: `translateX(${interpolate(imgIn, [0, 1], [-80, 0])}px)` }}>
             {visualElement}
           </div>
         </>
@@ -176,17 +196,17 @@ export const FeatureScene: React.FC<FeatureSceneProps> = ({ scene, screenshot, b
       {layout === 'stacked' && (
         <>
           {!usingMock && <AbsoluteFill style={{ background: `radial-gradient(ellipse at 50% 0%, ${branding.accentColor}22 0%, transparent 60%)`, opacity: fadeOut }} />}
-          <div style={{ position: 'absolute', top: 80, left: 120, right: 120, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div style={{ position: 'absolute', top: stackedTopOffset, left: sidePadding, right: sidePadding, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
             {textBlock('center')}
           </div>
           <div
             style={{
               position: 'absolute',
               left: '50%',
-              bottom: 80,
-              width: 1280,
-              height: 580,
-              marginLeft: -640,
+              bottom: stackedTopOffset,
+              width: stackedVisualWidth,
+              height: stackedVisualHeight,
+              marginLeft: -Math.round(stackedVisualWidth / 2),
               opacity: imgOpacity,
               transform: `translateY(${interpolate(imgIn, [0, 1], [60, 0])}px)`,
             }}
@@ -211,19 +231,24 @@ interface TextBlockProps {
   alignment: 'left' | 'right' | 'center'
   headlineY: number
   headlineOpacity: number
+  shortSide: number
+  canvasWidth: number
 }
 
-const TextBlock: React.FC<TextBlockProps> = ({ scene, branding, alignment, headlineY, headlineOpacity }) => {
-  // Centered layouts use a smaller headline so a long line wraps nicely
-  // inside the canvas instead of bleeding off the sides.
-  const headlineSize = alignment === 'center' ? 84 : 92
+const TextBlock: React.FC<TextBlockProps> = ({ scene, branding, alignment, headlineY, headlineOpacity, shortSide, canvasWidth }) => {
+  // Centered layouts use a slightly smaller headline so a long line wraps
+  // nicely inside the canvas instead of bleeding off the sides.
+  const headlineSize = Math.round(shortSide * (alignment === 'center' ? 0.078 : 0.085))
+  const subheadSize = Math.round(shortSide * 0.028)
+  const eyebrowSize = Math.round(shortSide * 0.02)
+  const subheadMaxWidth = Math.round(canvasWidth * (alignment === 'center' ? 0.57 : 0.354))
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: alignment === 'right' ? 'flex-end' : alignment === 'center' ? 'center' : 'flex-start',
-        gap: 20,
+        gap: Math.round(shortSide * 0.019),
         opacity: headlineOpacity,
         transform: `translateY(${headlineY}px)`,
         textAlign: alignment,
@@ -237,7 +262,7 @@ const TextBlock: React.FC<TextBlockProps> = ({ scene, branding, alignment, headl
           background: `${branding.accentColor}25`,
           color: branding.accentColor,
           fontFamily: `${branding.fontFamily}, 'Geist', system-ui, sans-serif`,
-          fontSize: 22,
+          fontSize: eyebrowSize,
           fontWeight: 600,
           letterSpacing: '0.04em',
           textTransform: 'uppercase',
@@ -263,12 +288,12 @@ const TextBlock: React.FC<TextBlockProps> = ({ scene, branding, alignment, headl
           style={{
             color: `${branding.textColor}B0`,
             fontFamily: `${branding.fontFamily}, 'Geist', system-ui, sans-serif`,
-            fontSize: 30,
+            fontSize: subheadSize,
             fontWeight: 400,
             lineHeight: 1.35,
             letterSpacing: '-0.005em',
             margin: 0,
-            maxWidth: alignment === 'center' ? 1100 : 680,
+            maxWidth: subheadMaxWidth,
           }}
         >
           {scene.subhead}

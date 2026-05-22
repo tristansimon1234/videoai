@@ -19,7 +19,20 @@ interface CtaProps {
  */
 export const Cta: React.FC<CtaProps> = ({ headline, buttonLabel, branding }) => {
   const frame = useCurrentFrame()
-  const { fps, durationInFrames } = useVideoConfig()
+  const { fps, durationInFrames, width, height } = useVideoConfig()
+  const shortSide = Math.min(width, height)
+  const sidePadding = Math.round(width * 0.0625)
+  const logoHeight = Math.round(shortSide * 0.059)
+  const logoMaxWidth = Math.round(width * 0.104)
+  const productNameSize = Math.round(shortSide * 0.033)
+  const headlineSize = Math.round(shortSide * 0.089)
+  const headlineMaxWidth = Math.round(width * 0.73)
+  const buttonFontSize = Math.round(shortSide * 0.035)
+  const buttonPaddingV = Math.round(shortSide * 0.022)
+  const buttonPaddingH = Math.round(shortSide * 0.052)
+  const chevronSize = Math.round(shortSide * 0.03)
+  const urlFontSize = Math.round(shortSide * 0.02)
+  const stackGap = Math.round(shortSide * 0.033)
 
   const logoT = spring({ frame, fps, config: { damping: 18, stiffness: 110 } })
   const headlineT = spring({ frame: frame - 8, fps, config: { damping: 16, stiffness: 100 } })
@@ -69,8 +82,8 @@ export const Cta: React.FC<CtaProps> = ({ headline, buttonLabel, branding }) => 
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: 36,
-          padding: '0 120px',
+          gap: stackGap,
+          padding: `0 ${sidePadding}px`,
         }}
       >
         {/* Brand lockup at the top: logo + product name side by side */}
@@ -78,7 +91,7 @@ export const Cta: React.FC<CtaProps> = ({ headline, buttonLabel, branding }) => 
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 16,
+            gap: Math.round(shortSide * 0.015),
             opacity: logoOpacity,
             transform: `scale(${logoScale})`,
           }}
@@ -87,7 +100,7 @@ export const Cta: React.FC<CtaProps> = ({ headline, buttonLabel, branding }) => 
             <Img
               src={branding.logoUrl}
               style={{
-                height: 64, width: 'auto', maxWidth: 200,
+                height: logoHeight, width: 'auto', maxWidth: logoMaxWidth,
                 objectFit: 'contain',
                 filter: `drop-shadow(0 8px 16px ${branding.accentColor}33)`,
               }}
@@ -96,7 +109,7 @@ export const Cta: React.FC<CtaProps> = ({ headline, buttonLabel, branding }) => 
           <span
             style={{
               fontFamily: `${branding.fontFamily}, 'Geist', system-ui, sans-serif`,
-              fontSize: 36, fontWeight: 700, letterSpacing: '-0.02em',
+              fontSize: productNameSize, fontWeight: 700, letterSpacing: '-0.02em',
               color: branding.textColor,
             }}
           >
@@ -109,13 +122,13 @@ export const Cta: React.FC<CtaProps> = ({ headline, buttonLabel, branding }) => 
           style={{
             color: branding.textColor,
             fontFamily: `${branding.fontFamily}, 'Geist', system-ui, sans-serif`,
-            fontSize: 96,
+            fontSize: headlineSize,
             fontWeight: 700,
             lineHeight: 1.05,
             letterSpacing: '-0.03em',
             textAlign: 'center',
             margin: 0,
-            maxWidth: 1400,
+            maxWidth: headlineMaxWidth,
             opacity: headlineOpacity,
             transform: `translateY(${headlineY}px)`,
           }}
@@ -128,13 +141,13 @@ export const Cta: React.FC<CtaProps> = ({ headline, buttonLabel, branding }) => 
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 16,
-            padding: '24px 56px',
+            gap: Math.round(shortSide * 0.015),
+            padding: `${buttonPaddingV}px ${buttonPaddingH}px`,
             borderRadius: 999,
             background: `linear-gradient(135deg, ${branding.accentColor}, ${branding.accentColor}DD)`,
             color: '#FFFFFF',
             fontFamily: `${branding.fontFamily}, 'Geist', system-ui, sans-serif`,
-            fontSize: 38,
+            fontSize: buttonFontSize,
             fontWeight: 600,
             letterSpacing: '-0.01em',
             boxShadow: `0 24px 60px -8px ${branding.accentColor}66, 0 0 0 1px ${branding.accentColor}AA`,
@@ -143,14 +156,14 @@ export const Cta: React.FC<CtaProps> = ({ headline, buttonLabel, branding }) => 
           }}
         >
           <span>{buttonLabel}</span>
-          {ChevronRight && <ChevronRight size={32} color="#FFFFFF" />}
+          {ChevronRight && <ChevronRight size={chevronSize} color="#FFFFFF" />}
         </div>
 
         {/* Product URL — small + muted, keeps the focal point on the button */}
         <span
           style={{
             fontFamily: `ui-monospace, SFMono-Regular, Menlo, monospace`,
-            fontSize: 22,
+            fontSize: urlFontSize,
             color: branding.textColor,
             opacity: urlOpacity,
             letterSpacing: '0.02em',

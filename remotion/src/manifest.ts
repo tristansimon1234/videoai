@@ -246,6 +246,9 @@ export const ManifestSchema = z.object({
   /** Linear volume 0–1 for the music track. Defaults to 0.15 (subtle).
    *  Bumped down further automatically inside scenes if needed. */
   musicVolume: z.number().min(0).max(1).optional(),
+  /** Aspect ratio of the rendered MP4. Optional for backwards-compat —
+   *  older manifests fall back to '16:9' in the renderer. */
+  format: z.enum(['16:9', '9:16', '1:1']).optional(),
 })
 
 export type Manifest = z.infer<typeof ManifestSchema>
@@ -255,3 +258,17 @@ export type Screenshot = z.infer<typeof ScreenshotSchema>
 export type Branding = z.infer<typeof BrandingSchema>
 export type Mock = z.infer<typeof MockSchema>
 export type MockTone = z.infer<typeof MockToneSchema>
+export type VideoFormat = '16:9' | '9:16' | '1:1'
+
+/** Canvas dimensions for each supported aspect ratio. The short side is
+ *  always 1080 so font sizes scaled from `min(width, height)` produce the
+ *  same visual size across formats. */
+export const FORMAT_DIMENSIONS: Record<VideoFormat, { width: number; height: number }> = {
+  '16:9': { width: 1920, height: 1080 },
+  '9:16': { width: 1080, height: 1920 },
+  '1:1': { width: 1080, height: 1080 },
+}
+
+export function resolveFormatDimensions(format: VideoFormat | undefined): { width: number; height: number } {
+  return FORMAT_DIMENSIONS[format ?? '16:9']
+}

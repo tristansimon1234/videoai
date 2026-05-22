@@ -1,11 +1,12 @@
 import React from 'react'
 import { Composition } from 'remotion'
 import { MarketingVideo, totalDurationInFrames } from './MarketingVideo.js'
+import { resolveFormatDimensions } from './manifest.js'
 import { SAMPLE_MANIFEST } from './sample-manifest.js'
 
 const FPS = 30
-const WIDTH = 1920
-const HEIGHT = 1080
+// Default canvas (16:9). calculateMetadata overrides this from the manifest.
+const DEFAULT = resolveFormatDimensions('16:9')
 
 /**
  * The composition uses the bundled SAMPLE_MANIFEST as defaultProps so the
@@ -14,13 +15,7 @@ const HEIGHT = 1080
  *   npm run remotion:preview                     # passes --props=manifest.json
  * Real-data render in production: the video-service passes the manifest as
  * inputProps to selectComposition + renderMedia, and `calculateMetadata`
- * recomputes durationInFrames from those props.
- *
- * Why no static `require('../manifest.json')`: webpack tries to resolve
- * static requires at bundle time, and on Vercel that file doesn't exist
- * (it's a local CLI artifact). The build would fail and Vercel would keep
- * serving the previous deploy. Inlining the sample + relying on --props /
- * inputProps avoids any filesystem dependency at bundle time.
+ * recomputes durationInFrames + width/height from those props.
  */
 export const RemotionRoot: React.FC = () => {
   return (
@@ -30,12 +25,17 @@ export const RemotionRoot: React.FC = () => {
         component={MarketingVideo}
         durationInFrames={Math.max(1, totalDurationInFrames(SAMPLE_MANIFEST, FPS))}
         fps={FPS}
-        width={WIDTH}
-        height={HEIGHT}
+        width={DEFAULT.width}
+        height={DEFAULT.height}
         defaultProps={{ manifest: SAMPLE_MANIFEST }}
-        calculateMetadata={({ props }) => ({
-          durationInFrames: Math.max(1, totalDurationInFrames(props.manifest, FPS)),
-        })}
+        calculateMetadata={({ props }) => {
+          const dims = resolveFormatDimensions(props.manifest.format)
+          return {
+            durationInFrames: Math.max(1, totalDurationInFrames(props.manifest, FPS)),
+            width: dims.width,
+            height: dims.height,
+          }
+        }}
       />
     </>
   )

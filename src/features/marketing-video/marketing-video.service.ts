@@ -1206,6 +1206,17 @@ export async function renderMarketingVideoForRun(
     await preflightRemotionBundle(remotionServeUrl)
     const manifestContent = await preflightManifest(manifestUrl)
 
+    // Pick dimensions from the manifest's format so the video-service
+    // gets the right canvas hint even if it ignores calculateMetadata.
+    // The Remotion side ALSO derives dims from format via calculateMetadata
+    // — both paths agree.
+    const FORMAT_DIMS: Record<string, { width: number; height: number }> = {
+      '16:9': { width: 1920, height: 1080 },
+      '9:16': { width: 1080, height: 1920 },
+      '1:1': { width: 1080, height: 1080 },
+    }
+    const dims = FORMAT_DIMS[existing.manifest.format ?? '16:9'] ?? FORMAT_DIMS['16:9']!
+
     const videoPath = await renderMarketingVideo({
       // The video-service wire protocol uses `runId` as the field name
       // on the render request — pass our videoId in that slot rather
@@ -1220,6 +1231,8 @@ export async function renderMarketingVideoForRun(
       // fine, it's purely additive.
       manifest: manifestContent,
       remotionServeUrl,
+      widthPx: dims.width,
+      heightPx: dims.height,
     })
 
     const videoUrl = `${getPublicUrl('artifacts', videoPath) ?? ''}?v=${Date.now()}`
