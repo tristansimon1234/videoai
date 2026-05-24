@@ -794,6 +794,73 @@ export async function updateMarketingManifestForRun(
 }
 
 /**
+ * Regenerate the mockCode for a single scene. Targeted refine path —
+ * the user looked at the rendered video, didn't like one scene's visual,
+ * and wants a fresh take without touching headline / voiceover / audio.
+ *
+ * Pulls the existing manifest, runs the designer (Sonnet) on just that
+ * scene with the same visualBrief / mode / framing / styleSeed, compiles
+ * the result, swaps it in, and persists. Returns the updated summary so
+ * the caller can chain a re-render.
+ *
+ * Costs nothing (no Anthropic call beyond the single designer pass, no
+ * ElevenLabs hit) and doesn't touch credits.
+ */
+export async function regenerateMarketingSceneForRun(
+  videoId: string,
+  sceneIndex: number,
+): Promise<MarketingVideoSummary> {
+  const { findMarketingVideoByRunId } = await import('./marketing-video.repository.js')
+  const existing = await findMarketingVideoByRunId(videoId)
+  if (!existing) throw new Error('No marketing-video manifest for this run yet — generate one first.')
+
+  const scenes = existing.manifest.script.scenes
+  const scene = scenes[sceneIndex]
+  if (!scene) throw new Error(`Scene index ${sceneIndex} out of bounds (have ${scenes.length})`)
+
+  const { compileMockCode } = await import('./mock-code.compiler.js')
+  const { repairMockCode, regenerateSceneMockCode } = await import('./marketing-script.generator.js')
+  const productName = existing.manifest.branding.productName
+  const styleSeedLabel = existing.manifest.script.styleSeed
+
+  let mockCode: string
+  let mockCompiledCode: string
+  try {
+    mockCode = await regenerateSceneMockCode({
+      scene: {
+        headline: scene.headline,
+        voiceover: scene.voiceover,
+        subhead: scene.subhead,
+        durationSeconds: scene.durationSeconds,
+        visualMode: scene.visualMode,
+        visualBrief: scene.visualBrief,
+        framing: scene.framing,
+        headlinePanel: scene.headlinePanel,
+      },
+      productName,
+      styleSeedLabel: styleSeedLabel ?? undefined,
+    })
+    mockCompiledCode = (await compileMockCode(mockCode)).compiled
+  } catch (firstErr) {
+    const msg = (firstErr as Error).message
+    console.warn(`[regenerate-scene ${videoId}#${sceneIndex}] designer failed: ${msg} — attempting one rescue`)
+    const rescued = await repairMockCode({
+      scene: { headline: scene.headline, voiceover: scene.voiceover, mockCode: '' },
+      compileError: `Regen failed: ${msg}. Generate a fresh MockScene from the headline + voice-over + brief: ${scene.visualBrief ?? '(no brief)'}.`,
+    })
+    mockCode = rescued
+    mockCompiledCode = (await compileMockCode(rescued)).compiled
+  }
+
+  const updatedScenes = scenes.map((s, i) => (i === sceneIndex ? { ...s, mockCode, mockCompiledCode } : s))
+  const updatedScript: MarketingManifest['script'] = { ...existing.manifest.script, scenes: updatedScenes }
+
+  return updateMarketingManifestForRun(videoId, {
+    script: updatedScript as import('./marketing-video.schema.js').UpdateMarketingManifestInput['script'],
+  })
+}
+
+/**
  * AI-driven manifest edit. The user types a free-form instruction
  * ("shorten scene 2 by 2 seconds and make it punchier", "switch the
  * accent color to blue", "rewrite the CTA in french") and the editor

@@ -16,6 +16,7 @@
   position: sticky;
   top: 0;
   z-index: 1;
+  backdrop-filter: saturate(140%) blur(8px);
 }
 
 .back {
@@ -24,14 +25,16 @@
   color: var(--color-muted-fg);
   font-size: var(--text-sm);
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
+  transition: color 0.15s ease, background 0.15s ease;
 }
 .back:hover { color: var(--color-fg); background: var(--color-bg-elevated); }
 
 .title {
   font-weight: 600;
   font-size: var(--text-md);
+  letter-spacing: -0.01em;
 }
 
 .scroll {
@@ -41,12 +44,12 @@
 }
 
 .thread {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   padding: 0 var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: 14px;
 }
 
 .userRow { display: flex; justify-content: flex-end; }
@@ -55,34 +58,35 @@
 .userBubble {
   background: var(--color-accent, #2563eb);
   color: white;
-  padding: 10px 14px;
+  padding: 11px 15px;
   border-radius: 18px 18px 4px 18px;
   max-width: 80%;
   font-size: var(--text-sm);
-  line-height: 1.5;
+  line-height: 1.55;
   white-space: pre-wrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .assistantBubble {
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
   color: var(--color-fg);
-  padding: 10px 14px;
+  padding: 11px 15px;
   border-radius: 18px 18px 18px 4px;
   max-width: 80%;
   font-size: var(--text-sm);
-  line-height: 1.5;
+  line-height: 1.55;
   white-space: pre-wrap;
 }
 
 .typing {
   display: inline-flex;
-  gap: 4px;
-  padding: 2px 0;
+  gap: 5px;
+  padding: 3px 2px;
 }
 .typing span {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--color-muted-fg);
   animation: blink 1.2s infinite ease-in-out;
@@ -90,12 +94,12 @@
 .typing span:nth-child(2) { animation-delay: 0.2s; }
 .typing span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes blink {
-  0%, 80%, 100% { opacity: 0.3; }
-  40% { opacity: 1; }
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-2px); }
 }
 
 .composer {
-  max-width: 720px;
+  max-width: 760px;
   width: 100%;
   margin: 0 auto;
   padding: var(--space-sm) var(--space-md) var(--space-lg);
@@ -130,26 +134,32 @@
   display: flex;
   gap: var(--space-sm);
   align-items: flex-end;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 8px 10px 8px 14px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.inputRow:focus-within {
+  border-color: var(--color-accent, #2563eb);
+  box-shadow: 0 0 0 4px var(--color-accent-soft, rgba(37, 99, 235, 0.14));
 }
 
 .input {
   flex: 1;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 6px 0;
   font-size: var(--text-sm);
   color: var(--color-fg);
   font-family: inherit;
   resize: none;
-  min-height: 44px;
+  min-height: 28px;
   max-height: 200px;
+  line-height: 1.5;
 }
-.input:focus {
-  outline: none;
-  border-color: var(--color-accent, #2563eb);
-  box-shadow: 0 0 0 3px var(--color-accent-soft, rgba(37, 99, 235, 0.15));
-}
+.input:focus { outline: none; }
 
 .error {
   font-size: var(--text-sm);
@@ -157,67 +167,7 @@
   background: var(--color-danger-soft, rgba(220, 38, 38, 0.1));
   padding: 8px 12px;
   border-radius: var(--radius-sm);
-}
-
-.confirmCard {
-  max-width: 720px;
-  width: 100%;
-  margin: 0 auto;
-  padding: var(--space-lg) var(--space-md) var(--space-xl);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-}
-
-.confirmRow {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: var(--space-md);
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.confirmLabel {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-muted-fg);
-  font-weight: 600;
-}
-
-.confirmValue {
-  font-size: var(--text-sm);
-  color: var(--color-fg);
-  line-height: 1.5;
-}
-
-.confirmGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-sm);
-}
-.confirmGrid > div {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: var(--space-sm) var(--space-md);
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.confirmChip {
-  font-size: var(--text-sm);
-  color: var(--color-fg);
-  font-weight: 500;
-}
-
-.confirmActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-sm);
+  border: 1px solid rgba(220, 38, 38, 0.25);
 }
 
 .generating {
@@ -230,113 +180,168 @@
   text-align: center;
   padding: 0 var(--space-lg);
 }
-.generating h2 { font-size: var(--text-lg); margin: 0; }
-.generating p { color: var(--color-muted-fg); margin: 0; font-size: var(--text-sm); }
+.generating h2 { font-size: var(--text-lg); margin: 0; letter-spacing: -0.01em; }
+.generating p { color: var(--color-muted-fg); margin: 0; font-size: var(--text-sm); max-width: 420px; line-height: 1.5; }
 .generating .warn { color: var(--color-warning, #d97706); }
 
-@media (max-width: 600px) {
-  .confirmGrid { grid-template-columns: 1fr; }
-}
-
-/* Plan card — editable tool card the LLM proposes inline. */
+/* ============================================================
+   Plan card — the LLM's editable proposal rendered inline.
+   ============================================================ */
 .planCard {
+  position: relative;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
+  border-radius: 14px;
+  padding: 16px 18px 14px 22px;
   display: flex;
   flex-direction: column;
-  gap: var(--space-sm);
-  max-width: 80%;
+  gap: 12px;
+  max-width: 100%;
+  width: 480px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px var(--color-border-subtle, transparent) inset;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.planCard:not(.stale):hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+.planCard.stale {
+  opacity: 0.5;
+  filter: saturate(0.6);
 }
 
-.planCard.stale {
-  opacity: 0.55;
+.planCardAccent {
+  position: absolute;
+  left: 0;
+  top: 14px;
+  bottom: 14px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-accent, #2563eb);
 }
+.stale .planCardAccent { background: var(--color-muted-fg); }
 
 .planCardHeader {
-  font-size: 11px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.planBadge {
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  color: var(--color-accent, #2563eb);
+  font-weight: 700;
+}
+.stale .planBadge { color: var(--color-muted-fg); }
+
+.planHint {
+  font-size: var(--text-xs);
   color: var(--color-muted-fg);
-  font-weight: 600;
+  font-style: italic;
 }
 
 .planRow {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 
 .planLabel {
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--color-muted-fg);
   font-weight: 600;
 }
 
-.planField {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 .planSelect, .planInput, .planTextarea {
-  flex: 1;
+  width: 100%;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: 6px 8px;
+  border-radius: 8px;
+  padding: 8px 10px;
   font-size: var(--text-sm);
   color: var(--color-fg);
   font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.planSelect:focus, .planInput:focus, .planTextarea:focus {
+  outline: none;
+  border-color: var(--color-accent, #2563eb);
+  box-shadow: 0 0 0 3px var(--color-accent-soft, rgba(37, 99, 235, 0.14));
+}
+.planSelect:disabled, .planInput:disabled, .planTextarea:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .planTextarea {
   resize: vertical;
-  min-height: 60px;
-}
-
-.planActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-sm);
-  margin-top: var(--space-xs);
+  min-height: 64px;
+  line-height: 1.5;
 }
 
 .planGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-sm);
+  gap: 10px;
 }
 
+.planActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.planCost {
+  font-size: var(--text-xs);
+  color: var(--color-muted-fg);
+  letter-spacing: 0.01em;
+}
+
+/* ============================================================
+   Suggestion card — small clickable card for voice / style picks.
+   ============================================================ */
 .suggestionCard {
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 10px 14px;
+  border-radius: 12px;
+  padding: 11px 14px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   gap: 4px;
   max-width: 80%;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
 }
 
 .suggestionCard:hover {
   border-color: var(--color-accent, #2563eb);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
+
+.suggestionCard:active { transform: translateY(0); }
 
 .suggestionCard.accepted {
   border-color: var(--color-accent, #2563eb);
   background: var(--color-accent-soft, rgba(37, 99, 235, 0.08));
+  cursor: default;
+  transform: none;
 }
 
 .suggestionLabel {
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--color-muted-fg);
   font-weight: 600;
 }
@@ -350,5 +355,10 @@
 .suggestionReason {
   font-size: var(--text-xs);
   color: var(--color-muted-fg);
-  line-height: 1.4;
+  line-height: 1.45;
+}
+
+@media (max-width: 600px) {
+  .planCard { width: 100%; }
+  .planGrid { grid-template-columns: 1fr; }
 }

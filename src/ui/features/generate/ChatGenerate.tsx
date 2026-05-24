@@ -62,6 +62,8 @@ interface UiMessage extends ChatMessageDTO {
   id: string
 }
 
+type VoiceListItem = { voiceId: string; name: string; category: string }
+
 export function ChatGenerate(): React.ReactElement {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<UiMessage[]>([])
@@ -70,6 +72,7 @@ export function ChatGenerate(): React.ReactElement {
   const [phase, setPhase] = useState<Phase>('chat')
   const [error, setError] = useState<string | null>(null)
   const [brands, setBrands] = useState<BrandDTO[]>([])
+  const [voices, setVoices] = useState<VoiceListItem[]>([])
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const initFired = useRef(false)
   const commitFiredRef = useRef<string | null>(null)
@@ -105,8 +108,12 @@ export function ChatGenerate(): React.ReactElement {
     if (initFired.current) return
     initFired.current = true
     void (async () => {
-      const brandsRes = await api.brands.list().catch(() => ({ items: [] }))
+      const [brandsRes, voicesRes] = await Promise.all([
+        api.brands.list().catch(() => ({ items: [] })),
+        api.marketingVideos.voices().catch(() => ({ voices: [] as VoiceListItem[] })),
+      ])
       setBrands(brandsRes.items)
+      setVoices(voicesRes.voices)
       await callChat([])
     })()
   }, [callChat])
@@ -207,6 +214,7 @@ export function ChatGenerate(): React.ReactElement {
         brandId: defaultBrand?.id,
         options: {
           tone: plan.tone,
+          voiceId: plan.voiceId,
           musicTrackId: plan.musicTrackId,
           aiMusicPrompt: plan.aiMusicPrompt,
           userPrompt: plan.userPrompt,
@@ -255,6 +263,7 @@ export function ChatGenerate(): React.ReactElement {
               isLatestPlan={(toolUseId) => latestPlanRef?.toolUseId === toolUseId}
               onAcceptSuggestion={sendToolResult}
               onGenerate={runGenerate}
+              voices={voices}
               disabled={waiting}
             />
           ))}
@@ -305,10 +314,11 @@ interface MessageRowProps {
   isLatestPlan: (toolUseId: string) => boolean
   onAcceptSuggestion: (toolUseId: string, content: string) => Promise<void>
   onGenerate: (plan: ChatPlanInput) => Promise<void>
+  voices: VoiceListItem[]
   disabled: boolean
 }
 
-function MessageRow({ message, isLatestPlan, onAcceptSuggestion, onGenerate, disabled }: MessageRowProps): React.ReactElement | null {
+function MessageRow({ message, isLatestPlan, onAcceptSuggestion, onGenerate, voices, disabled }: MessageRowProps): React.ReactElement | null {
   // User message — either plain text typed in, or a tool_result we
   // surface as a quiet "(accepted)" line so the conversation stays
   // legible. Tool_result blocks aren't rendered as bubbles to keep the
@@ -347,6 +357,7 @@ function MessageRow({ message, isLatestPlan, onAcceptSuggestion, onGenerate, dis
                   toolUseId={b.id}
                   initial={b.input as ChatPlanInput}
                   isLive={isLatestPlan(b.id)}
+                  voices={voices}
                   onGenerate={onGenerate}
                   disabled={disabled}
                 />
@@ -355,13 +366,22 @@ function MessageRow({ message, isLatestPlan, onAcceptSuggestion, onGenerate, dis
           }
           if (b.name === 'suggest_voice') {
             const input = b.input as { voiceId?: string; voiceName?: string; reason?: string }
+            const resolvedName =
+              input.voiceName
+              ?? (input.voiceId ? voices.find((v) => v.voiceId === input.voiceId)?.name : undefined)
+              ?? input.voiceId
+              ?? 'Voice'
+            const id = input.voiceId ?? ''
             return (
               <div key={key} className={styles.assistantRow}>
                 <SuggestionCard
                   label="Voice suggestion"
-                  title={input.voiceName ?? input.voiceId ?? 'Voice'}
+                  title={resolvedName}
                   reason={input.reason}
-                  onAccept={() => void onAcceptSuggestion(b.id, `User accepted voice ${input.voiceName ?? input.voiceId}.`)}
+                  onAccept={() => void onAcceptSuggestion(
+                    b.id,
+                    `User accepted this voice. Include voiceId="${id}" (name: ${resolvedName}) in the next propose_plan or commit_and_generate so the choice persists.`,
+                  )}
                   disabled={disabled}
                 />
               </div>
@@ -409,11 +429,12 @@ interface PlanCardProps {
   toolUseId: string
   initial: ChatPlanInput
   isLive: boolean
+  voices: VoiceListItem[]
   onGenerate: (plan: ChatPlanInput) => Promise<void>
   disabled: boolean
 }
 
-function PlanCard({ initial, isLive, onGenerate, disabled }: PlanCardProps): React.ReactElement {
+function PlanCard({ initial, isLive, voices, onGenerate, disabled }: PlanCardProps): React.ReactElement {
   const [plan, setPlan] = useState<ChatPlanInput>(initial)
 
   // The LLM may emit a new propose_plan when it has more info. The "live"
@@ -425,10 +446,15 @@ function PlanCard({ initial, isLive, onGenerate, disabled }: PlanCardProps): Rea
   }, [initial, isLive])
 
   const set = <K extends keyof ChatPlanInput>(k: K, v: ChatPlanInput[K]) => setPlan({ ...plan, [k]: v })
+  const fieldsDisabled = !isLive || disabled
 
   return (
     <div className={`${styles.planCard} ${!isLive ? styles.stale : ''}`}>
-      <div className={styles.planCardHeader}>{isLive ? 'Plan — edit any field' : 'Earlier plan'}</div>
+      <div className={styles.planCardAccent} aria-hidden />
+      <div className={styles.planCardHeader}>
+        <span className={styles.planBadge}>{isLive ? 'Draft plan' : 'Earlier plan'}</span>
+        <span className={styles.planHint}>{isLive ? 'Tweak any field, then hit Generate.' : 'Snapshot — no longer editable.'}</span>
+      </div>
 
       <div className={styles.planRow}>
         <span className={styles.planLabel}>Brief</span>
@@ -436,20 +462,21 @@ function PlanCard({ initial, isLive, onGenerate, disabled }: PlanCardProps): Rea
           className={styles.planTextarea}
           value={plan.brief}
           onChange={(e) => set('brief', e.target.value)}
-          disabled={!isLive || disabled}
+          disabled={fieldsDisabled}
+          rows={3}
         />
       </div>
 
       <div className={styles.planGrid}>
         <div className={styles.planRow}>
           <span className={styles.planLabel}>Format</span>
-          <select className={styles.planSelect} value={plan.format} onChange={(e) => set('format', e.target.value as VideoFormat)} disabled={!isLive || disabled}>
+          <select className={styles.planSelect} value={plan.format} onChange={(e) => set('format', e.target.value as VideoFormat)} disabled={fieldsDisabled}>
             {FORMATS.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
         </div>
         <div className={styles.planRow}>
           <span className={styles.planLabel}>Tone</span>
-          <select className={styles.planSelect} value={plan.tone} onChange={(e) => set('tone', e.target.value as VoiceTone)} disabled={!isLive || disabled}>
+          <select className={styles.planSelect} value={plan.tone} onChange={(e) => set('tone', e.target.value as VoiceTone)} disabled={fieldsDisabled}>
             {VOICE_TONES.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
@@ -457,25 +484,41 @@ function PlanCard({ initial, isLive, onGenerate, disabled }: PlanCardProps): Rea
 
       <div className={styles.planGrid}>
         <div className={styles.planRow}>
-          <span className={styles.planLabel}>Music</span>
-          <select className={styles.planSelect} value={plan.musicTrackId} onChange={(e) => set('musicTrackId', e.target.value)} disabled={!isLive || disabled}>
-            {MUSIC_TRACKS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+          <span className={styles.planLabel}>Voice</span>
+          <select
+            className={styles.planSelect}
+            value={plan.voiceId ?? ''}
+            onChange={(e) => set('voiceId', e.target.value || undefined)}
+            disabled={fieldsDisabled || voices.length === 0}
+          >
+            <option value="">(default)</option>
+            {voices.map((v) => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
           </select>
         </div>
         <div className={styles.planRow}>
-          <span className={styles.planLabel}>Style</span>
-          <select className={styles.planSelect} value={plan.styleSeed ?? ''} onChange={(e) => set('styleSeed', e.target.value || undefined)} disabled={!isLive || disabled}>
-            <option value="">(auto)</option>
-            {STYLE_SEEDS.map((s) => <option key={s} value={s}>{s}</option>)}
+          <span className={styles.planLabel}>Music</span>
+          <select className={styles.planSelect} value={plan.musicTrackId} onChange={(e) => set('musicTrackId', e.target.value)} disabled={fieldsDisabled}>
+            {MUSIC_TRACKS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
           </select>
         </div>
       </div>
 
-      <div className={styles.planActions}>
-        <Button variant="primary" size="sm" disabled={!isLive || disabled} onClick={() => void onGenerate(plan)}>
-          Generate (1 credit)
-        </Button>
+      <div className={styles.planRow}>
+        <span className={styles.planLabel}>Style</span>
+        <select className={styles.planSelect} value={plan.styleSeed ?? ''} onChange={(e) => set('styleSeed', e.target.value || undefined)} disabled={fieldsDisabled}>
+          <option value="">(auto — let the architect pick)</option>
+          {STYLE_SEEDS.map((s) => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
+
+      {isLive && (
+        <div className={styles.planActions}>
+          <span className={styles.planCost}>1 credit · ~2-3 min</span>
+          <Button variant="primary" size="sm" disabled={disabled} onClick={() => void onGenerate(plan)}>
+            Generate video
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

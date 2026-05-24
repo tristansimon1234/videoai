@@ -91,6 +91,10 @@ const PLAN_INPUT_SCHEMA = {
       type: 'string',
       description: 'Optional visual style label. One of: ' + STYLE_SEED_LABELS.join(', ') + '. Drives the designer\'s visual vocabulary.',
     },
+    voiceId: {
+      type: 'string',
+      description: 'Optional ElevenLabs voice id. When the user has accepted a suggest_voice card (you see a tool_result saying so), echo the voiceId here on the next propose_plan / commit_and_generate so the choice persists.',
+    },
     userPrompt: {
       type: 'string',
       description: 'Optional extra steering for the architect (audience, emphasis, tone shift) that doesn\'t belong in the factual brief.',
@@ -148,8 +152,8 @@ const TOOLS: Anthropic.Tool[] = [
 
 const SYSTEM_PROMPT = `You help a user create a 45-second marketing video for their product. You have these tools:
 
-- propose_plan: render an editable plan card (brief, format, tone, music, style). Use when you have a coherent draft — the user edits inline.
-- suggest_voice / suggest_style: render a small clickable suggestion card. Optional — use when you have a strong opinion.
+- propose_plan: render an editable plan card (brief, format, tone, music, style, voice). Use when you have a coherent draft — the user edits inline.
+- suggest_voice / suggest_style: render a small clickable suggestion card. Optional — use when you have a strong opinion. When the user accepts a voice suggestion you'll get a tool_result with the voiceId; carry that voiceId into the next propose_plan or commit_and_generate so it isn't lost.
 - commit_and_generate: launch the pipeline. Call ONLY after the user has explicitly confirmed.
 
 Be brief and natural. Match the user's language. Don't ask for every detail before proposing a plan — propose early, the user will edit. You decide the rhythm.`

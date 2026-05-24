@@ -340,6 +340,7 @@ function FontSection({ videoId, manifest, disabled, onSaved }: SectionProps): Re
 function ScriptSection({ videoId, manifest, disabled, onSaved }: SectionProps): React.ReactElement {
   const [draft, setDraft] = useState(() => structuredClone(manifest.script))
   const [saving, setSaving] = useState(false)
+  const [regenIndex, setRegenIndex] = useState<number | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const dirty = JSON.stringify(draft) !== JSON.stringify(manifest.script)
 
@@ -361,6 +362,19 @@ function ScriptSection({ videoId, manifest, disabled, onSaved }: SectionProps): 
     }
   }
 
+  const onRegenerateScene = async (idx: number) => {
+    setRegenIndex(idx)
+    setErr(null)
+    try {
+      await api.marketingVideos.regenerateScene(videoId, idx)
+      await onSaved()
+    } catch (e) {
+      setErr((e as Error).message)
+    } finally {
+      setRegenIndex(null)
+    }
+  }
+
   return (
     <div className={styles.section}>
       <div className={styles.sectionHeader}><h3 className={styles.sectionTitle}>Script</h3></div>
@@ -371,26 +385,41 @@ function ScriptSection({ videoId, manifest, disabled, onSaved }: SectionProps): 
         <Field label="Voiceover" multiline value={draft.hook.voiceover} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDraft({ ...draft, hook: { ...draft.hook, voiceover: e.target.value } })} />
       </div>
 
-      {draft.scenes.map((scene, idx) => (
-        <div key={idx} className={styles.sceneEditor}>
-          <span className={styles.sceneLabel}>Scene {idx + 1}</span>
-          <Field label="Headline" value={scene.headline} onChange={(e: ChangeEvent<HTMLInputElement>) => {
-            const next = [...draft.scenes]
-            next[idx] = { ...scene, headline: e.target.value }
-            setDraft({ ...draft, scenes: next })
-          }} />
-          <Field label="Subhead" value={scene.subhead ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => {
-            const next = [...draft.scenes]
-            next[idx] = { ...scene, subhead: e.target.value }
-            setDraft({ ...draft, scenes: next })
-          }} />
-          <Field label="Voiceover" multiline value={scene.voiceover} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
-            const next = [...draft.scenes]
-            next[idx] = { ...scene, voiceover: e.target.value }
-            setDraft({ ...draft, scenes: next })
-          }} />
-        </div>
-      ))}
+      {draft.scenes.map((scene, idx) => {
+        const regenerating = regenIndex === idx
+        return (
+          <div key={idx} className={styles.sceneEditor}>
+            <div className={styles.sceneEditorHeader}>
+              <span className={styles.sceneLabel}>Scene {idx + 1}</span>
+              <button
+                type="button"
+                className={styles.regenButton}
+                onClick={() => void onRegenerateScene(idx)}
+                disabled={disabled || saving || regenIndex !== null}
+                title="Re-run the designer on just this scene — keeps headline & voice-over, changes the visual."
+              >
+                {regenerating ? <span className={styles.spinDot} aria-hidden /> : <span aria-hidden>↻</span>}
+                <span>{regenerating ? 'Regenerating…' : 'Regenerate visual'}</span>
+              </button>
+            </div>
+            <Field label="Headline" value={scene.headline} onChange={(e: ChangeEvent<HTMLInputElement>) => {
+              const next = [...draft.scenes]
+              next[idx] = { ...scene, headline: e.target.value }
+              setDraft({ ...draft, scenes: next })
+            }} />
+            <Field label="Subhead" value={scene.subhead ?? ''} onChange={(e: ChangeEvent<HTMLInputElement>) => {
+              const next = [...draft.scenes]
+              next[idx] = { ...scene, subhead: e.target.value }
+              setDraft({ ...draft, scenes: next })
+            }} />
+            <Field label="Voiceover" multiline value={scene.voiceover} onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+              const next = [...draft.scenes]
+              next[idx] = { ...scene, voiceover: e.target.value }
+              setDraft({ ...draft, scenes: next })
+            }} />
+          </div>
+        )
+      })}
 
       <div className={styles.sceneEditor}>
         <span className={styles.sceneLabel}>CTA</span>
@@ -400,9 +429,9 @@ function ScriptSection({ videoId, manifest, disabled, onSaved }: SectionProps): 
       </div>
 
       {err && <p className={styles.errorMsg}>{err}</p>}
-      <p className={styles.savedHint}>Saving edits will also re-synthesize the voice-over.</p>
+      <p className={styles.savedHint}>Saving edits will also re-synthesize the voice-over. Regenerating only swaps the visual.</p>
       <div className={styles.actions}>
-        <Button variant="primary" size="sm" disabled={!dirty || saving || disabled} onClick={() => void onSave()}>
+        <Button variant="primary" size="sm" disabled={!dirty || saving || disabled || regenIndex !== null} onClick={() => void onSave()}>
           {saving ? 'Saving…' : 'Save & re-render'}
         </Button>
       </div>

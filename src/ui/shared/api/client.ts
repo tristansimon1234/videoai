@@ -106,6 +106,7 @@ export interface ChatPlanInput {
   musicTrackId: string
   aiMusicPrompt?: string
   styleSeed?: string
+  voiceId?: string
   userPrompt?: string
 }
 
@@ -174,6 +175,8 @@ export const api = {
       request(`/marketing-videos/${id}/manifest`, { method: 'PUT', body: JSON.stringify(body) }),
     updateVoiceover: (id: string, body: { voiceId?: string; tone?: VoiceTone }): Promise<MarketingVideoListItemDTO & { manifest: unknown }> =>
       request(`/marketing-videos/${id}/voiceover`, { method: 'POST', body: JSON.stringify(body) }),
+    regenerateScene: (id: string, sceneIndex: number): Promise<MarketingVideoListItemDTO & { manifest: unknown }> =>
+      request(`/marketing-videos/${id}/scenes/${sceneIndex}/regenerate`, { method: 'POST', body: JSON.stringify({}) }),
     render: (id: string): Promise<MarketingVideoListItemDTO & { manifest: unknown }> =>
       request(`/marketing-videos/${id}/render`, { method: 'POST', body: JSON.stringify({}) }),
   },

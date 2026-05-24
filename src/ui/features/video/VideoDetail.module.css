@@ -161,12 +161,57 @@
   gap: 8px;
 }
 
+.sceneEditorHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .sceneLabel {
   font-size: var(--text-xs);
   color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 600;
+}
+
+.regenButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.regenButton:hover:not(:disabled) {
+  color: var(--color-fg);
+  border-color: var(--color-accent, #2563eb);
+  background: var(--color-accent-soft, rgba(37, 99, 235, 0.08));
+}
+.regenButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinDot {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--color-border);
+  border-top-color: var(--color-accent, #2563eb);
+  border-radius: 50%;
+  display: inline-block;
+  animation: regenSpin 0.7s linear infinite;
+}
+@keyframes regenSpin {
+  to { transform: rotate(360deg); }
 }
 
 .errorMsg {

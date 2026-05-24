@@ -19,6 +19,7 @@ import {
   updateMarketingVoiceoverForRun,
   updateMarketingManifestForRun,
   editMarketingManifestWithAi,
+  regenerateMarketingSceneForRun,
   setMarketingThumbnailForRun,
   MUSIC_PRESETS,
   AI_MUSIC_STYLES,
@@ -38,6 +39,11 @@ const CreateBodySchema = z.object({
 })
 
 const IdParamSchema = z.object({ id: z.string().uuid() })
+
+const SceneRegenerateParamSchema = z.object({
+  id: z.string().uuid(),
+  index: z.coerce.number().int().min(0).max(20),
+})
 
 /** Chat content blocks — mirror the Anthropic SDK shapes (text /
  *  tool_use / tool_result). Accepts a plain string for the very first
@@ -325,6 +331,29 @@ marketingVideoRouter.post('/:id/voiceover', (req: Request, res: Response, next: 
       ensureOwnership(video, userId)
 
       const summary = await updateMarketingVoiceoverForRun(video.id, body.data)
+      res.status(200).json(summary)
+    } catch (err) { next(err) }
+  })()
+})
+
+/**
+ * POST /api/marketing-videos/:id/scenes/:index/regenerate
+ * Re-run the designer on ONE scene, keeping the same headline / voice-over
+ * / brief / mode. Cheap iteration path for "I like the script but scene 2
+ * is ugly — try again". No credit cost. Auto re-renders.
+ */
+marketingVideoRouter.post('/:id/scenes/:index/regenerate', (req: Request, res: Response, next: NextFunction): void => {
+  void (async () => {
+    try {
+      const userId = getUserId(req)
+      const params = SceneRegenerateParamSchema.safeParse(req.params)
+      if (!params.success) throw new ValidationError(params.error.flatten())
+
+      const video = await getMarketingVideoById(params.data.id)
+      ensureOwnership(video, userId)
+
+      await regenerateMarketingSceneForRun(params.data.id, params.data.index)
+      const summary = await renderMarketingVideoForRun(params.data.id)
       res.status(200).json(summary)
     } catch (err) { next(err) }
   })()
